@@ -1,0 +1,2 @@
+ALTER TABLE metric ADD COLUMN unit TEXT DEFAULT '';
+ALTER TABLE metric ADD COLUMN thresholds TEXT DEFAULT '';

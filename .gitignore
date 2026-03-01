@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+out/
+release/
+build/
+data/
+*.db
+*.sqlite
+*.sqlite3

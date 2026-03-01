@@ -1,0 +1,69 @@
+{
+  "name": "sql-helper",
+  "version": "0.1.0",
+  "description": "智能財報助手 — Desktop SQLite database helper",
+  "author": "sql-helper",
+  "main": "dist-electron/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "pack": "npm run build && electron-builder --win",
+    "pack:dir": "npm run build && electron-builder --win --dir",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.sql-helper.app",
+    "productName": "智能財報助手",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "database/migrations",
+        "to": "database/migrations",
+        "filter": ["*.sql"]
+      },
+      {
+        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "智能財報助手"
+    }
+  },
+  "dependencies": {
+    "echarts": "^6.0.0",
+    "lucide-vue-next": "^0.575.0",
+    "sql.js": "^1.11.0",
+    "vue": "^3.5.13",
+    "vue-echarts": "^8.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vue-tsc": "^2.2.0"
+  }
+}
