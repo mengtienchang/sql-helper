@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { join } from 'path'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import * as XLSX from 'xlsx'
@@ -675,7 +675,93 @@ ${schema}`
   })
 }
 
+function buildMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: '檔案',
+      submenu: [
+        { label: '重新載入', role: 'reload' },
+        { type: 'separator' },
+        { label: '結束', role: 'quit' },
+      ],
+    },
+    {
+      label: '編輯',
+      submenu: [
+        { label: '復原', role: 'undo' },
+        { label: '重做', role: 'redo' },
+        { type: 'separator' },
+        { label: '剪下', role: 'cut' },
+        { label: '複製', role: 'copy' },
+        { label: '貼上', role: 'paste' },
+        { label: '全選', role: 'selectAll' },
+      ],
+    },
+    {
+      label: '檢視',
+      submenu: [
+        { label: '放大', role: 'zoomIn' },
+        { label: '縮小', role: 'zoomOut' },
+        { label: '重設縮放', role: 'resetZoom' },
+        { type: 'separator' },
+        { label: '全螢幕', role: 'togglefullscreen' },
+        { type: 'separator' },
+        { label: '開發者工具', role: 'toggleDevTools' },
+      ],
+    },
+    {
+      label: '說明',
+      submenu: [
+        {
+          label: '使用教程',
+          click: () => {
+            mainWindow?.webContents.send('menu:startTour')
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'GitHub 儲存庫',
+          click: () => {
+            shell.openExternal('https://github.com/mengtienchang/sql-helper')
+          },
+        },
+        { type: 'separator' },
+        {
+          label: '關於 智能財報助手',
+          click: () => {
+            dialog.showMessageBox(mainWindow!, {
+              type: 'info',
+              title: '關於 智能財報助手',
+              message: '智能財報助手 v0.1.0',
+              detail: [
+                '桌面端財務報表分析工具',
+                '',
+                '主要功能：',
+                '  - 儀表板：KPI 卡片 + ECharts 圖表，5 組預設主題',
+                '  - SQL 查詢：直接撰寫 SQL 查詢財報數據',
+                '  - AI 助手：自然語言提問，自動生成 SQL',
+                '  - Excel 匯入/匯出：支援自訂模板佔位符',
+                '  - 指標管理：門檻判斷（良好/注意/異常）',
+                '',
+                '技術架構：',
+                '  Electron + Vue 3 + TypeScript + sql.js',
+                '',
+                '資料完全離線儲存，無需安裝資料庫。',
+              ].join('\n'),
+              buttons: ['確定'],
+            })
+          },
+        },
+      ],
+    },
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+}
+
 app.whenReady().then(async () => {
+  buildMenu()
   await initDatabase()
   registerIpcHandlers()
   createWindow()

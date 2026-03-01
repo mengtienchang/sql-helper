@@ -47,4 +47,7 @@ interface Window {
     simple(data: { columns: string[]; rows: Record<string, unknown>[] }): Promise<{ success: boolean; message?: string }>
     showOpenDialog(): Promise<string | null>
   }
+  menu: {
+    onStartTour(callback: () => void): void
+  }
 }

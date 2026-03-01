@@ -29,7 +29,14 @@ const exportApi = {
   showOpenDialog: () => ipcRenderer.invoke('file:showOpenDialog'),
 }
 
+const menuApi = {
+  onStartTour: (callback: () => void) => {
+    ipcRenderer.on('menu:startTour', () => callback())
+  },
+}
+
 contextBridge.exposeInMainWorld('db', dbApi)
 contextBridge.exposeInMainWorld('setting', settingApi)
 contextBridge.exposeInMainWorld('chat', chatApi)
 contextBridge.exposeInMainWorld('export', exportApi)
+contextBridge.exposeInMainWorld('menu', menuApi)
