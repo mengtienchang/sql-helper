@@ -28,11 +28,8 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   name TEXT NOT NULL UNIQUE,
   location TEXT,
   created_at TEXT DEFAULT (datetime('now'))
-)`,
-  },
-  {
-    name: '002_create_factory_alter.sql',
-    sql: `ALTER TABLE financial_report ADD COLUMN factory_id INTEGER REFERENCES factory(id)`,
+);
+ALTER TABLE financial_report ADD COLUMN factory_id INTEGER REFERENCES factory(id)`,
   },
   {
     name: '003_create_metric.sql',
@@ -201,16 +198,22 @@ function runMigrations(): void {
 
   for (const m of MIGRATIONS) {
     if (executed.has(m.name)) continue
-    const statements = m.sql.split(';').map(s => s.trim()).filter(s => s.length > 0)
-    for (const s of statements) {
-      try {
-        db.run(s)
-      } catch (err) {
-        console.warn(`[migration] ${m.name} statement failed:`, err)
+    try {
+      const statements = m.sql.split(';').map(s => s.trim()).filter(s => s.length > 0)
+      for (const s of statements) {
+        try {
+          db.run(s)
+        } catch (err) {
+          console.warn(`[migration] ${m.name} statement failed:`, err)
+        }
       }
+      // 用字串拼接避免 sql.js 瀏覽器版參數綁定問題
+      const safeName = m.name.replace(/'/g, "''")
+      db.run(`INSERT INTO _migrations (name) VALUES ('${safeName}')`)
+      console.log(`[migration] executed: ${m.name}`)
+    } catch (err) {
+      console.error(`[migration] ${m.name} failed:`, err)
     }
-    db.run('INSERT INTO _migrations (name) VALUES (?)', [m.name])
-    console.log(`[migration] executed: ${m.name}`)
   }
 }
 
