@@ -26,7 +26,9 @@ jobs:
 
       - run: npm ci
 
-      - run: cp node_modules/sql.js/dist/sql-wasm.wasm public/sql-wasm.wasm
+      - run: |
+          cp node_modules/sql.js/dist/sql-wasm.wasm public/sql-wasm.wasm
+          cp node_modules/sql.js/dist/sql-wasm-browser.wasm public/sql-wasm-browser.wasm
 
       - run: npx vue-tsc --noEmit && npx vite build --config vite.config.web.ts
 
