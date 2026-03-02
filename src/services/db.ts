@@ -215,9 +215,11 @@ function runMigrations(): void {
 }
 
 export async function initWebDB(): Promise<void> {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => `${import.meta.env.BASE_URL}${file}`,
-  })
+  // 手動載入 WASM，避免 sql.js 內部路徑找不到
+  const wasmUrl = `${import.meta.env.BASE_URL}sql-wasm.wasm`
+  const wasmResp = await fetch(wasmUrl)
+  const wasmBinary = await wasmResp.arrayBuffer()
+  const SQL = await initSqlJs({ wasmBinary: new Uint8Array(wasmBinary) } as any)
 
   const saved = await loadFromIDB()
   db = saved ? new SQL.Database(saved) : new SQL.Database()
