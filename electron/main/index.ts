@@ -81,6 +81,11 @@ function registerIpcHandlers(): void {
         { name: '總部', location: '台北' },
         { name: '廠區A', location: '昆山' },
         { name: '廠區B', location: '深圳' },
+        { name: '廠區C', location: '東莞' },
+        { name: '廠區D', location: '蘇州' },
+        { name: '廠區E', location: '重慶' },
+        { name: '廠區F', location: '成都' },
+        { name: '廠區G', location: '武漢' },
       ]
       for (const f of factories) {
         dbService.execute(
@@ -90,7 +95,7 @@ function registerIpcHandlers(): void {
       }
 
       // 財報數據
-      const periods = ['2023-Q1', '2023-Q2', '2023-Q3', '2023-Q4', '2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4']
+      const periods = ['2023-Q1', '2023-Q2', '2023-Q3', '2023-Q4', '2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4', '2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4']
       const baseData: Record<string, number> = {
         財報營收: 128500, 產值統計: 125800,
         原材料成本: 51400, 委外加工: 7700, 人工成本: 19280, 變動製費: 6420, 變動管銷研: 3850,
@@ -109,7 +114,7 @@ function registerIpcHandlers(): void {
       const placeholders = columns.map(() => '?').join(', ')
       const insertSql = `INSERT INTO financial_report (period, factory_id, ${columns.join(', ')}) VALUES (?, ?, ${placeholders})`
 
-      const factoryScales = [1.0, 0.7, 0.5]
+      const factoryScales = [1.0, 0.7, 0.5, 0.6, 0.45, 0.55, 0.4, 0.35]
       for (let fi = 0; fi < factories.length; fi++) {
         for (let pi = 0; pi < periods.length; pi++) {
           const growth = 1 + pi * 0.05

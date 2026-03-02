@@ -114,6 +114,10 @@ ALTER TABLE metric ADD COLUMN thresholds TEXT DEFAULT ''`,
   created_at TEXT DEFAULT (datetime('now'))
 )`,
   },
+  {
+    name: '009_chart_category.sql',
+    sql: `ALTER TABLE chart ADD COLUMN category TEXT DEFAULT ''`,
+  },
 ]
 
 // ---- IndexedDB helpers ----
@@ -245,12 +249,21 @@ function seed() {
       { name: '總部', location: '台北' },
       { name: '廠區A', location: '昆山' },
       { name: '廠區B', location: '深圳' },
+      { name: '廠區C', location: '東莞' },
+      { name: '廠區D', location: '蘇州' },
+      { name: '廠區E', location: '重慶' },
+      { name: '廠區F', location: '成都' },
+      { name: '廠區G', location: '武漢' },
     ]
     for (const f of factories) {
       execute('INSERT OR IGNORE INTO factory (name, location) VALUES (?, ?)', [f.name, f.location])
     }
 
-    const periods = ['2023-Q1', '2023-Q2', '2023-Q3', '2023-Q4', '2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4']
+    const periods = [
+      '2023-Q1', '2023-Q2', '2023-Q3', '2023-Q4',
+      '2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4',
+      '2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4',
+    ]
     const baseData: Record<string, number> = {
       財報營收: 128500, 產值統計: 125800,
       原材料成本: 51400, 委外加工: 7700, 人工成本: 19280, 變動製費: 6420, 變動管銷研: 3850,
@@ -269,14 +282,14 @@ function seed() {
     const placeholders = columns.map(() => '?').join(', ')
     const insertSql = `INSERT INTO financial_report (period, factory_id, ${columns.join(', ')}) VALUES (?, ?, ${placeholders})`
 
-    const factoryScales = [1.0, 0.7, 0.5]
+    const factoryScales = [1.0, 0.7, 0.5, 0.6, 0.45, 0.55, 0.4, 0.35]
     for (let fi = 0; fi < factories.length; fi++) {
       for (let pi = 0; pi < periods.length; pi++) {
-        const growth = 1 + pi * 0.05
+        const growth = 1 + pi * 0.04
         const values = columns.map(col => {
           const base = baseData[col]
           const scaled = base * factoryScales[fi] * growth
-          const jitter = 1 + (Math.random() - 0.5) * 0.06
+          const jitter = 1 + (Math.random() - 0.5) * 0.08
           return Math.round(scaled * jitter * 100) / 100
         })
         execute(insertSql, [periods[pi], fi + 1, ...values])
@@ -302,25 +315,79 @@ function seed() {
       }
     }
 
-    const charts = [
-      { name: '各期營收趨勢', chart_type: 'line', sql: `SELECT period, SUM(財報營收) as 營業收入, SUM(營業毛利) as 營業毛利, SUM(淨利潤) as 淨利潤 FROM financial_report GROUP BY period ORDER BY period`, x_column: 'period', series_columns: JSON.stringify(['營業收入', '營業毛利', '淨利潤']), title: '各期營收與利潤趨勢', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 1, description: '營收、毛利、淨利的季度趨勢對比' },
-      { name: '廠區成本結構', chart_type: 'stacked_bar', sql: `SELECT f.name as 廠區, SUM(原材料成本) as 原材料, SUM(人工成本) as 人工, SUM(變動製費) as 變動製費, SUM(固定人工) as 固定人工, SUM(廠房設備環境) as 廠房設備 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`, x_column: '廠區', series_columns: JSON.stringify(['原材料', '人工', '變動製費', '固定人工', '廠房設備']), title: '各廠區成本結構', y_formatter: '{v}萬', stack: 1, enabled: 1, sort_order: 2, description: '各廠區成本組成堆疊比較' },
-      { name: '最新一期成本佔比', chart_type: 'pie', sql: `SELECT '原材料' as 類別, SUM(原材料成本) as 金額 FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '人工', SUM(人工成本) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '委外加工', SUM(委外加工) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '變動製費', SUM(變動製費) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '固定人工', SUM(固定人工) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '廠房設備', SUM(廠房設備環境) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report)`, x_column: '類別', series_columns: JSON.stringify(['金額']), title: '最新一期成本佔比', y_formatter: '', stack: 0, enabled: 1, sort_order: 3, description: '最新季度各項成本的佔比分析' },
-      { name: '獲利率趨勢', chart_type: 'line', sql: `SELECT period, ROUND(SUM(營業毛利)*100.0/SUM(財報營收),2) as 毛利率, ROUND(SUM(營業毛利-銷管研)*100.0/SUM(財報營收),2) as 營業利潤率, ROUND(SUM(淨利潤)*100.0/SUM(財報營收),2) as 淨利潤率 FROM financial_report GROUP BY period ORDER BY period`, x_column: 'period', series_columns: JSON.stringify(['毛利率', '營業利潤率', '淨利潤率']), title: '獲利率趨勢', y_formatter: '{v}%', stack: 0, enabled: 1, sort_order: 4, description: '毛利率、營業利潤率、淨利潤率的季度走勢' },
-      { name: '各廠區營收對比', chart_type: 'bar', sql: `SELECT f.name as 廠區, SUM(財報營收) as 營業收入, SUM(淨利潤) as 淨利潤 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`, x_column: '廠區', series_columns: JSON.stringify(['營業收入', '淨利潤']), title: '各廠區營收對比', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 5, description: '各廠區累計營收與淨利潤比較' },
-      { name: '庫存周轉天數趨勢', chart_type: 'stacked_bar', sql: `SELECT period, ROUND(SUM(庫存周轉天數_原材料)/COUNT(*),1) as 原材料, ROUND(SUM(庫存周轉天數_在制品)/COUNT(*),1) as 在制品, ROUND(SUM(庫存周轉天數_成品)/COUNT(*),1) as 成品, ROUND(SUM(庫存周轉天數_模具)/COUNT(*),1) as 模具 FROM financial_report GROUP BY period ORDER BY period`, x_column: 'period', series_columns: JSON.stringify(['原材料', '在制品', '成品', '模具']), title: '庫存周轉天數趨勢', y_formatter: '{v}天', stack: 1, enabled: 1, sort_order: 6, description: '各類庫存周轉天數的季度變化' },
+    // ── 圖表：時間趨勢 ──
+    const charts: { name: string; chart_type: string; sql: string; x_column: string; series_columns: string; title: string; y_formatter: string; stack: number; enabled: number; sort_order: number; description: string; category: string }[] = [
+      { name: '營收利潤趨勢', chart_type: 'line', category: '時間',
+        sql: `SELECT period, SUM(財報營收) as 營業收入, SUM(營業毛利) as 營業毛利, SUM(淨利潤) as 淨利潤 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['營業收入', '營業毛利', '淨利潤']),
+        title: '營收與利潤趨勢', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 1, description: '營收、毛利、淨利的季度趨勢對比' },
+      { name: '獲利率趨勢', chart_type: 'line', category: '時間',
+        sql: `SELECT period, ROUND(SUM(營業毛利)*100.0/SUM(財報營收),2) as 毛利率, ROUND(SUM(營業毛利-銷管研)*100.0/SUM(財報營收),2) as 營業利潤率, ROUND(SUM(淨利潤)*100.0/SUM(財報營收),2) as 淨利潤率 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['毛利率', '營業利潤率', '淨利潤率']),
+        title: '獲利率趨勢', y_formatter: '{v}%', stack: 0, enabled: 1, sort_order: 2, description: '毛利率、營業利潤率、淨利潤率的季度走勢' },
+      { name: '成本趨勢', chart_type: 'stacked_bar', category: '時間',
+        sql: `SELECT period, SUM(原材料成本) as 原材料, SUM(人工成本) as 人工, SUM(委外加工) as 委外加工, SUM(變動製費) as 變動製費, SUM(固定人工) as 固定人工, SUM(廠房設備環境) as 廠房設備 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['原材料', '人工', '委外加工', '變動製費', '固定人工', '廠房設備']),
+        title: '各期成本結構', y_formatter: '{v}萬', stack: 1, enabled: 1, sort_order: 3, description: '各期成本項目堆疊趨勢' },
+      { name: '庫存周轉天數趨勢', chart_type: 'stacked_bar', category: '時間',
+        sql: `SELECT period, ROUND(SUM(庫存周轉天數_原材料)/COUNT(*),1) as 原材料, ROUND(SUM(庫存周轉天數_在制品)/COUNT(*),1) as 在制品, ROUND(SUM(庫存周轉天數_成品)/COUNT(*),1) as 成品, ROUND(SUM(庫存周轉天數_模具)/COUNT(*),1) as 模具 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['原材料', '在制品', '成品', '模具']),
+        title: '庫存周轉天數趨勢', y_formatter: '{v}天', stack: 1, enabled: 1, sort_order: 4, description: '各類庫存周轉天數的季度變化' },
+      { name: 'ROE/ROA 趨勢', chart_type: 'line', category: '時間',
+        sql: `SELECT period, ROUND(SUM(淨利潤)*100.0/SUM(股東權益_平均),2) as ROE, ROUND(SUM(淨利潤)*100.0/SUM(總資產_年平均),2) as ROA FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['ROE', 'ROA']),
+        title: 'ROE / ROA 趨勢', y_formatter: '{v}%', stack: 0, enabled: 1, sort_order: 5, description: '股東權益報酬率與資產報酬率趨勢' },
+      { name: '變動vs固定成本趨勢', chart_type: 'line', category: '時間',
+        sql: `SELECT period, SUM(原材料成本+委外加工+人工成本+變動製費+變動管銷研) as 變動成本, SUM(固定人工+廠房設備環境) as 固定成本 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['變動成本', '固定成本']),
+        title: '變動成本 vs 固定成本', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 6, description: '變動成本與固定成本的季度比較' },
+      { name: '損益平衡營收趨勢', chart_type: 'line', category: '時間',
+        sql: `SELECT period, SUM(財報營收) as 實際營收, ROUND(SUM(固定人工+廠房設備環境) / (SUM(產值統計-原材料成本-委外加工-人工成本-變動製費-變動管銷研)*1.0/SUM(產值統計)), 0) as 損益平衡點 FROM financial_report GROUP BY period ORDER BY period`,
+        x_column: 'period', series_columns: JSON.stringify(['實際營收', '損益平衡點']),
+        title: '營收 vs 損益平衡點', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 7, description: '實際營收與損益平衡營收的對比' },
+
+      // ── 圖表：廠區比較 ──
+      { name: '廠區營收對比', chart_type: 'bar', category: '廠區',
+        sql: `SELECT f.name as 廠區, SUM(財報營收) as 營業收入, SUM(營業毛利) as 營業毛利, SUM(淨利潤) as 淨利潤 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['營業收入', '營業毛利', '淨利潤']),
+        title: '各廠區營收與利潤', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 10, description: '各廠區累計營收、毛利與淨利潤比較' },
+      { name: '廠區成本結構', chart_type: 'stacked_bar', category: '廠區',
+        sql: `SELECT f.name as 廠區, SUM(原材料成本) as 原材料, SUM(人工成本) as 人工, SUM(變動製費) as 變動製費, SUM(固定人工) as 固定人工, SUM(廠房設備環境) as 廠房設備 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['原材料', '人工', '變動製費', '固定人工', '廠房設備']),
+        title: '各廠區成本結構', y_formatter: '{v}萬', stack: 1, enabled: 1, sort_order: 11, description: '各廠區成本組成堆疊比較' },
+      { name: '廠區獲利率比較', chart_type: 'bar', category: '廠區',
+        sql: `SELECT f.name as 廠區, ROUND(SUM(營業毛利)*100.0/SUM(財報營收),2) as 毛利率, ROUND(SUM(營業毛利-銷管研)*100.0/SUM(財報營收),2) as 營業利潤率, ROUND(SUM(淨利潤)*100.0/SUM(財報營收),2) as 淨利率 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['毛利率', '營業利潤率', '淨利率']),
+        title: '各廠區獲利率', y_formatter: '{v}%', stack: 0, enabled: 1, sort_order: 12, description: '各廠區毛利率、營業利潤率、淨利率比較' },
+      { name: '廠區庫存周轉比較', chart_type: 'stacked_bar', category: '廠區',
+        sql: `SELECT f.name as 廠區, ROUND(AVG(庫存周轉天數_原材料),1) as 原材料, ROUND(AVG(庫存周轉天數_在制品),1) as 在制品, ROUND(AVG(庫存周轉天數_成品),1) as 成品, ROUND(AVG(庫存周轉天數_模具),1) as 模具 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['原材料', '在制品', '成品', '模具']),
+        title: '各廠區庫存周轉天數', y_formatter: '{v}天', stack: 1, enabled: 1, sort_order: 13, description: '各廠區平均庫存周轉天數比較' },
+      { name: '廠區邊際貢獻比較', chart_type: 'bar', category: '廠區',
+        sql: `SELECT f.name as 廠區, ROUND(SUM(產值統計-原材料成本-委外加工-人工成本-變動製費-變動管銷研),0) as 邊際貢獻, ROUND(SUM(固定人工+廠房設備環境),0) as 固定成本 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['邊際貢獻', '固定成本']),
+        title: '各廠區邊際貢獻 vs 固定成本', y_formatter: '{v}萬', stack: 0, enabled: 1, sort_order: 14, description: '各廠區邊際貢獻與固定成本對比' },
+      { name: '最新一期成本佔比', chart_type: 'pie', category: '廠區',
+        sql: `SELECT '原材料' as 類別, SUM(原材料成本) as 金額 FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '人工', SUM(人工成本) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '委外加工', SUM(委外加工) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '變動製費', SUM(變動製費) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '固定人工', SUM(固定人工) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report) UNION ALL SELECT '廠房設備', SUM(廠房設備環境) FROM financial_report WHERE period=(SELECT MAX(period) FROM financial_report)`,
+        x_column: '類別', series_columns: JSON.stringify(['金額']),
+        title: '最新一期成本佔比', y_formatter: '', stack: 0, enabled: 1, sort_order: 15, description: '最新季度各項成本的佔比分析' },
+      { name: '廠區營收佔比', chart_type: 'pie', category: '廠區',
+        sql: `SELECT f.name as 廠區, SUM(財報營收) as 營收 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`,
+        x_column: '廠區', series_columns: JSON.stringify(['營收']),
+        title: '各廠區營收佔比', y_formatter: '', stack: 0, enabled: 1, sort_order: 16, description: '各廠區營收佔總體比例' },
     ]
     for (const c of charts) {
-      execute('INSERT OR IGNORE INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-        [c.name, c.chart_type, c.sql, c.x_column, c.series_columns, c.title, c.y_formatter, c.stack, c.enabled, c.sort_order, c.description])
+      execute('INSERT OR IGNORE INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description, category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [c.name, c.chart_type, c.sql, c.x_column, c.series_columns, c.title, c.y_formatter, c.stack, c.enabled, c.sort_order, c.description, c.category])
     }
 
+    // ── 儀表板 ──
     const dashboardDefs = [
-      { name: '綜合總覽', description: '一眼看全局：營收、成本、關鍵指標', sort_order: 0 },
-      { name: '獲利分析', description: '利潤率與報酬率深入分析', sort_order: 1 },
-      { name: '成本分析', description: '各廠區成本結構與損益平衡', sort_order: 2 },
-      { name: '營運效率', description: '庫存周轉與產能利用追蹤', sort_order: 3 },
-      { name: '報酬率追蹤', description: 'ROE/ROA 與利潤走勢', sort_order: 4 },
+      { name: '綜合總覽', description: '一眼看全局：營收、成本、獲利、庫存關鍵指標', sort_order: 0 },
+      { name: '時間趨勢分析', description: '各項指標的季度走勢與變化', sort_order: 1 },
+      { name: '廠區比較分析', description: '各廠區績效、成本與效率對比', sort_order: 2 },
+      { name: '獲利深度分析', description: '利潤率、報酬率、邊際貢獻深入分析', sort_order: 3 },
+      { name: '成本與損益', description: '成本結構、損益平衡與效率追蹤', sort_order: 4 },
     ]
     for (const d of dashboardDefs) {
       execute('INSERT OR IGNORE INTO dashboard (name, description, sort_order) VALUES (?, ?, ?)', [d.name, d.description, d.sort_order])
@@ -333,32 +400,59 @@ function seed() {
 
     const dashboardContents = [
       { dashboard: '綜合總覽', items: [
-        { type: 'chart', name: '各期營收趨勢', span: 2 }, { type: 'chart', name: '各廠區營收對比', span: 1 },
-        { type: 'chart', name: '最新一期成本佔比', span: 1 }, { type: 'metric', name: '產品邊際貢獻率', span: 1 },
-        { type: 'metric', name: '營業利潤率', span: 1 }, { type: 'metric', name: '淨利潤率', span: 1 },
+        { type: 'chart', name: '營收利潤趨勢', span: 2 },
+        { type: 'chart', name: '廠區營收對比', span: 1 },
+        { type: 'chart', name: '廠區營收佔比', span: 1 },
+        { type: 'chart', name: '獲利率趨勢', span: 2 },
+        { type: 'chart', name: '最新一期成本佔比', span: 1 },
+        { type: 'chart', name: '庫存周轉天數趨勢', span: 1 },
+        { type: 'metric', name: '產品邊際貢獻率', span: 1 },
+        { type: 'metric', name: '營業利潤率', span: 1 },
+        { type: 'metric', name: '淨利潤率', span: 1 },
         { type: 'metric', name: '庫存周轉天數合計', span: 1 },
       ]},
-      { dashboard: '獲利分析', items: [
-        { type: 'chart', name: '獲利率趨勢', span: 2 }, { type: 'chart', name: '各期營收趨勢', span: 2 },
-        { type: 'metric', name: '產品邊際貢獻率', span: 1 }, { type: 'metric', name: '營業利潤率', span: 1 },
-        { type: 'metric', name: '淨利潤率', span: 1 }, { type: 'metric', name: '產品邊際貢獻', span: 1 },
-        { type: 'metric', name: 'ROE', span: 1 }, { type: 'metric', name: 'ROA', span: 1 },
+      { dashboard: '時間趨勢分析', items: [
+        { type: 'chart', name: '營收利潤趨勢', span: 2 },
+        { type: 'chart', name: '獲利率趨勢', span: 2 },
+        { type: 'chart', name: '成本趨勢', span: 2 },
+        { type: 'chart', name: '變動vs固定成本趨勢', span: 1 },
+        { type: 'chart', name: '損益平衡營收趨勢', span: 1 },
+        { type: 'chart', name: '庫存周轉天數趨勢', span: 2 },
+        { type: 'chart', name: 'ROE/ROA 趨勢', span: 2 },
       ]},
-      { dashboard: '成本分析', items: [
-        { type: 'chart', name: '廠區成本結構', span: 2 }, { type: 'chart', name: '最新一期成本佔比', span: 1 },
-        { type: 'chart', name: '各廠區營收對比', span: 1 }, { type: 'metric', name: '變動成本小計', span: 1 },
-        { type: 'metric', name: '固定成本小計', span: 1 }, { type: 'metric', name: '損益平衡營收', span: 1 },
+      { dashboard: '廠區比較分析', items: [
+        { type: 'chart', name: '廠區營收對比', span: 2 },
+        { type: 'chart', name: '廠區營收佔比', span: 1 },
+        { type: 'chart', name: '最新一期成本佔比', span: 1 },
+        { type: 'chart', name: '廠區成本結構', span: 2 },
+        { type: 'chart', name: '廠區獲利率比較', span: 1 },
+        { type: 'chart', name: '廠區邊際貢獻比較', span: 1 },
+        { type: 'chart', name: '廠區庫存周轉比較', span: 2 },
+      ]},
+      { dashboard: '獲利深度分析', items: [
+        { type: 'chart', name: '獲利率趨勢', span: 2 },
+        { type: 'chart', name: 'ROE/ROA 趨勢', span: 2 },
+        { type: 'chart', name: '廠區獲利率比較', span: 1 },
+        { type: 'chart', name: '廠區邊際貢獻比較', span: 1 },
+        { type: 'chart', name: '營收利潤趨勢', span: 2 },
         { type: 'metric', name: '產品邊際貢獻率', span: 1 },
+        { type: 'metric', name: '營業利潤率', span: 1 },
+        { type: 'metric', name: '淨利潤率', span: 1 },
+        { type: 'metric', name: 'ROE', span: 1 },
+        { type: 'metric', name: 'ROA', span: 1 },
+        { type: 'metric', name: '產品邊際貢獻', span: 1 },
       ]},
-      { dashboard: '營運效率', items: [
-        { type: 'chart', name: '庫存周轉天數趨勢', span: 2 }, { type: 'chart', name: '各廠區營收對比', span: 1 },
-        { type: 'metric', name: '庫存周轉天數合計', span: 1 }, { type: 'metric', name: '產品邊際貢獻', span: 1 },
+      { dashboard: '成本與損益', items: [
+        { type: 'chart', name: '成本趨勢', span: 2 },
+        { type: 'chart', name: '廠區成本結構', span: 2 },
+        { type: 'chart', name: '變動vs固定成本趨勢', span: 1 },
+        { type: 'chart', name: '損益平衡營收趨勢', span: 1 },
+        { type: 'chart', name: '最新一期成本佔比', span: 1 },
+        { type: 'chart', name: '廠區邊際貢獻比較', span: 1 },
+        { type: 'metric', name: '變動成本小計', span: 1 },
+        { type: 'metric', name: '固定成本小計', span: 1 },
         { type: 'metric', name: '損益平衡營收', span: 1 },
-      ]},
-      { dashboard: '報酬率追蹤', items: [
-        { type: 'chart', name: '獲利率趨勢', span: 2 }, { type: 'chart', name: '廠區成本結構', span: 2 },
-        { type: 'metric', name: 'ROE', span: 1 }, { type: 'metric', name: 'ROA', span: 1 },
-        { type: 'metric', name: '營業利潤率', span: 1 }, { type: 'metric', name: '淨利潤率', span: 1 },
+        { type: 'metric', name: '產品邊際貢獻率', span: 1 },
       ]},
     ]
 
