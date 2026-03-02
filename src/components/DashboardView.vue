@@ -10,6 +10,7 @@ import VChart from 'vue-echarts'
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3,
   PieChart, Activity, LayoutDashboard, Lightbulb, Target,
+  Filter, Calendar, Factory,
 } from 'lucide-vue-next'
 import { buildChartOption } from '../composables/useChartRenderer'
 
@@ -41,8 +42,15 @@ const kpis = ref<KPI[]>([])
 const hasData = ref(false)
 const dashboards = ref<DashboardDef[]>([])
 const activeDashboardId = ref<number | null>(null)
+const activeDashboard = ref<DashboardDef | null>(null)
 const renderItems = ref<RenderItem[]>([])
 const loading = ref(false)
+
+// ── Filters ──
+const filterPeriod = ref<string>('')       // '' = all
+const filterFactoryId = ref<number>(0)     // 0 = all
+const availablePeriods = ref<string[]>([])
+const availableFactories = ref<{ id: number; name: string }[]>([])
 
 function fmt(n: number): string {
   return n.toLocaleString('zh-TW', { maximumFractionDigits: 0 })
@@ -60,7 +68,39 @@ function computeStatus(value: number, thresholdsJson: string): 'good' | 'warn' |
 
 const statusLabels: Record<string, string> = { good: '良好', warn: '注意', bad: '異常' }
 
+// ── Filter logic ──
+// Uses a CTE to replace `financial_report` with filtered version
+function applyFilters(sql: string): string {
+  const conditions: string[] = []
+  if (filterPeriod.value) conditions.push(`period='${filterPeriod.value.replace(/'/g, "''")}'`)
+  if (filterFactoryId.value) conditions.push(`factory_id=${Number(filterFactoryId.value)}`)
+  if (conditions.length === 0) return sql
+  const where = conditions.join(' AND ')
+  const cte = `WITH _filtered_fr AS (SELECT * FROM financial_report WHERE ${where})`
+  return cte + ' ' + sql.replace(/financial_report/g, '_filtered_fr')
+}
+
+function buildKpiWhere(): { where: string; params: unknown[] } {
+  const conds: string[] = []
+  const params: unknown[] = []
+  if (filterPeriod.value) { conds.push('period = ?'); params.push(filterPeriod.value) }
+  if (filterFactoryId.value) { conds.push('factory_id = ?'); params.push(filterFactoryId.value) }
+  return { where: conds.length ? ' AND ' + conds.join(' AND ') : '', params }
+}
+
+async function loadFilterOptions() {
+  const pRes = await window.db.execute('SELECT DISTINCT period FROM financial_report ORDER BY period')
+  if (pRes.success && pRes.rows) {
+    availablePeriods.value = pRes.rows.map(r => r.period as string)
+  }
+  const fRes = await window.db.execute('SELECT id, name FROM factory ORDER BY id')
+  if (fRes.success && fRes.rows) {
+    availableFactories.value = fRes.rows.map(r => ({ id: r.id as number, name: r.name as string }))
+  }
+}
+
 onMounted(async () => {
+  await loadFilterOptions()
   await loadKPIs()
   await loadDashboards()
 })
@@ -70,21 +110,31 @@ watch(activeDashboardId, (id) => {
   activeDashboard.value = dashboards.value.find(d => d.id === id) ?? null
 })
 
+// Re-load when filters change
+watch([filterPeriod, filterFactoryId], () => {
+  loadKPIs()
+  if (activeDashboardId.value !== null) loadDashboardItems(activeDashboardId.value)
+})
+
 async function loadKPIs() {
   try {
     const periodsRes = await window.db.execute(
       `SELECT DISTINCT period FROM financial_report ORDER BY period`
     )
     if (!periodsRes.success || !periodsRes.rows?.length) return
-    const periods = periodsRes.rows.map(r => r.period as string)
+    const allPeriods = periodsRes.rows.map(r => r.period as string)
     hasData.value = true
 
-    const latestPeriod = periods[periods.length - 1]
-    const prevPeriod = periods.length > 1 ? periods[periods.length - 2] : null
+    const { where: filterWhere, params: filterParams } = buildKpiWhere()
+
+    // If period is filtered, use that; otherwise use latest
+    const targetPeriod = filterPeriod.value || allPeriods[allPeriods.length - 1]
+    const prevIdx = allPeriods.indexOf(targetPeriod) - 1
+    const prevPeriod = prevIdx >= 0 ? allPeriods[prevIdx] : null
 
     const curRes = await window.db.execute(
-      `SELECT SUM(財報營收) as revenue, SUM(淨利潤) as profit, SUM(營業毛利) as gross_profit FROM financial_report WHERE period = ?`,
-      [latestPeriod]
+      `SELECT SUM(財報營收) as revenue, SUM(淨利潤) as profit, SUM(營業毛利) as gross_profit FROM financial_report WHERE period = ?${filterFactoryId.value ? ' AND factory_id = ?' : ''}`,
+      filterFactoryId.value ? [targetPeriod, filterFactoryId.value] : [targetPeriod]
     )
     if (!curRes.success || !curRes.rows?.length) return
     const cur = curRes.rows[0] as any
@@ -92,13 +142,13 @@ async function loadKPIs() {
     const profit = cur.profit ?? 0
     const grossMargin = revenue ? (cur.gross_profit / revenue * 100) : 0
 
-    let revTrend = latestPeriod, profitTrend = latestPeriod, marginTrend = latestPeriod
+    let revTrend = targetPeriod, profitTrend = targetPeriod, marginTrend = targetPeriod
     let revUp = true, profitUp = true, marginUp = true
 
     if (prevPeriod) {
       const prevRes = await window.db.execute(
-        `SELECT SUM(財報營收) as revenue, SUM(淨利潤) as profit, SUM(營業毛利) as gross_profit FROM financial_report WHERE period = ?`,
-        [prevPeriod]
+        `SELECT SUM(財報營收) as revenue, SUM(淨利潤) as profit, SUM(營業毛利) as gross_profit FROM financial_report WHERE period = ?${filterFactoryId.value ? ' AND factory_id = ?' : ''}`,
+        filterFactoryId.value ? [prevPeriod, filterFactoryId.value] : [prevPeriod]
       )
       if (prevRes.success && prevRes.rows?.length) {
         const prev = prevRes.rows[0] as any
@@ -116,6 +166,9 @@ async function loadKPIs() {
       }
     }
 
+    const factoryLabel = filterFactoryId.value
+      ? availableFactories.value.find(f => f.id === filterFactoryId.value)?.name || ''
+      : ''
     const factoryRes = await window.db.execute(`SELECT COUNT(*) as cnt FROM factory`)
     const factoryCount = factoryRes.success && factoryRes.rows?.length ? (factoryRes.rows[0] as any).cnt : 0
 
@@ -123,7 +176,7 @@ async function loadKPIs() {
       { label: '營業收入', value: fmt(revenue), trend: revTrend, up: revUp, icon: 'revenue' },
       { label: '淨利潤', value: fmt(profit), trend: profitTrend, up: profitUp, icon: 'profit' },
       { label: '毛利率', value: grossMargin.toFixed(2) + '%', trend: marginTrend, up: marginUp, icon: 'margin' },
-      { label: '廠區數', value: String(factoryCount), trend: `共 ${periods.length} 個季度`, icon: 'tables' },
+      { label: factoryLabel || '廠區數', value: factoryLabel ? targetPeriod : String(factoryCount), trend: factoryLabel ? factoryLabel : `共 ${allPeriods.length} 個季度`, icon: 'tables' },
     ]
   } catch (err) {
     console.error('[dashboard] KPI error:', err)
@@ -141,8 +194,6 @@ async function loadDashboards() {
   }
 }
 
-const activeDashboard = ref<DashboardDef | null>(null)
-
 async function loadDashboardItems(dashboardId: number) {
   loading.value = true
   renderItems.value = []
@@ -153,8 +204,14 @@ async function loadDashboardItems(dashboardId: number) {
     )
     if (!itemsRes.success || !itemsRes.rows?.length) { loading.value = false; return }
 
-    const periodRes = await window.db.execute('SELECT MAX(period) as p FROM financial_report')
-    const latestPeriod = periodRes.success && periodRes.rows?.length ? (periodRes.rows[0] as any).p : null
+    // For metrics: determine which period to use
+    let metricPeriod: string | null = null
+    if (filterPeriod.value) {
+      metricPeriod = filterPeriod.value
+    } else {
+      const periodRes = await window.db.execute('SELECT MAX(period) as p FROM financial_report')
+      metricPeriod = periodRes.success && periodRes.rows?.length ? (periodRes.rows[0] as any).p : null
+    }
 
     const items: RenderItem[] = []
     for (const row of itemsRes.rows) {
@@ -167,7 +224,8 @@ async function loadDashboardItems(dashboardId: number) {
         if (chartRes.success && chartRes.rows?.length) {
           const c = chartRes.rows[0] as any
           try {
-            const dataRes = await window.db.execute(c.sql)
+            const filteredSql = applyFilters(c.sql)
+            const dataRes = await window.db.execute(filteredSql)
             if (dataRes.success && dataRes.rows?.length) {
               const option = buildChartOption(
                 dataRes.rows, c.chart_type, c.x_column, JSON.parse(c.series_columns),
@@ -184,8 +242,10 @@ async function loadDashboardItems(dashboardId: number) {
         if (metricRes.success && metricRes.rows?.length) {
           const m = metricRes.rows[0] as any
           try {
-            const wrapped = `SELECT ROUND(SUM(sub.value), 2) as total FROM (${m.sql}) sub WHERE sub.period = ?`
-            const mRes = await window.db.execute(wrapped, [latestPeriod])
+            // Apply factory filter to metric SQL, then wrap with period filter
+            const filteredMetricSql = applyFilters(m.sql)
+            const wrapped = `SELECT ROUND(SUM(sub.value), 2) as total FROM (${filteredMetricSql}) sub WHERE sub.period = ?`
+            const mRes = await window.db.execute(wrapped, [metricPeriod])
             if (mRes.success && mRes.rows?.length) {
               const rawValue = (mRes.rows[0] as any).total ?? 0
               const unit = m.unit || ''
@@ -232,6 +292,28 @@ const iconMap: Record<string, any> = {
     </div>
 
     <div v-else class="dashboard-content">
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <Filter :size="14" class="filter-icon" />
+        <div class="filter-group">
+          <Calendar :size="13" />
+          <select v-model="filterPeriod">
+            <option value="">全部期間</option>
+            <option v-for="p in availablePeriods" :key="p" :value="p">{{ p }}</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <Factory :size="13" />
+          <select v-model.number="filterFactoryId">
+            <option :value="0">全部廠區</option>
+            <option v-for="f in availableFactories" :key="f.id" :value="f.id">{{ f.name }}</option>
+          </select>
+        </div>
+        <button v-if="filterPeriod || filterFactoryId" class="clear-filter" @click="filterPeriod = ''; filterFactoryId = 0">
+          清除篩選
+        </button>
+      </div>
+
       <!-- KPI -->
       <div class="kpi-grid">
         <div v-for="kpi in kpis" :key="kpi.label" class="kpi-card">
@@ -307,6 +389,7 @@ const iconMap: Record<string, any> = {
                 <Lightbulb :size="18" />
               </div>
               <h3>智能分析</h3>
+              <span class="ai-badge">AI 示例</span>
             </div>
             <div class="story-content">{{ activeDashboard.analysis }}</div>
           </div>
@@ -317,6 +400,7 @@ const iconMap: Record<string, any> = {
                 <Target :size="18" />
               </div>
               <h3>建議動作</h3>
+              <span class="ai-badge">AI 示例</span>
             </div>
             <ul class="actions-list">
               <li v-for="(action, idx) in activeDashboard.actions.split('\n').filter(a => a.trim())" :key="idx">
@@ -325,6 +409,9 @@ const iconMap: Record<string, any> = {
             </ul>
           </div>
         </div>
+        <p v-if="activeDashboard?.analysis || activeDashboard?.actions" class="ai-disclaimer">
+          以上「智能分析」與「建議動作」為預設示例內容，接入 AI 後將依據實際數據自動產生。可在管理頁手動編輯。
+        </p>
       </template>
     </div>
   </div>
@@ -345,6 +432,28 @@ const iconMap: Record<string, any> = {
   background: #fff; color: #374151; font-size: 13px; cursor: pointer; min-width: 160px;
 }
 .dashboard-switcher select:focus { outline: none; border-color: #2563eb; }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 10px; margin-bottom: 20px;
+}
+.filter-icon { color: #6b7280; flex-shrink: 0; }
+.filter-group {
+  display: flex; align-items: center; gap: 6px; color: #6b7280;
+}
+.filter-group select {
+  padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+  background: #f9fafb; color: #374151; font-size: 13px; cursor: pointer; min-width: 130px;
+}
+.filter-group select:focus { outline: none; border-color: #2563eb; background: #fff; }
+.clear-filter {
+  margin-left: auto; padding: 4px 10px; font-size: 12px;
+  border: 1px solid #d1d5db; border-radius: 5px;
+  background: #fff; color: #6b7280; cursor: pointer;
+}
+.clear-filter:hover { background: #f3f4f6; color: #374151; }
 
 .empty-state, .empty-dashboard {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -450,6 +559,16 @@ const iconMap: Record<string, any> = {
   font-size: 13px; line-height: 1.6; color: #374151;
   padding: 8px 12px; background: #f8fafc; border-radius: 6px;
   border-left: 2px solid #2563eb; position: relative;
+}
+
+.ai-badge {
+  font-size: 10px; font-weight: 500; padding: 2px 8px;
+  border-radius: 10px; background: #f3f4f6; color: #9ca3af;
+  border: 1px solid #e5e7eb; letter-spacing: 0.02em;
+}
+.ai-disclaimer {
+  margin-top: 10px; font-size: 11px; color: #9ca3af; text-align: center;
+  font-style: italic;
 }
 
 /* Popover */
