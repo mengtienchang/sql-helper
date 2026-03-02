@@ -20,6 +20,10 @@
     "perMachine": false,
     "allowToChangeInstallationDirectory": true
   },
+  "mac": {
+    "target": ["dmg"],
+    "artifactName": "${productName}-Mac-${version}.${ext}"
+  },
   "linux": {
     "target": ["AppImage"],
     "artifactName": "${productName}-Linux-${version}.${ext}"

@@ -36,10 +36,12 @@ async function loadTemplates() {
 onMounted(loadTemplates)
 
 async function pickFile() {
-  const filePath = await window.export.showOpenDialog()
-  if (filePath) {
-    addForm.value.filePath = filePath
-    addForm.value.fileName = filePath.split(/[/\\]/).pop() || filePath
+  const result = await window.export.showOpenDialog()
+  if (result) {
+    addForm.value.filePath = typeof result === 'string' ? result : result
+    addForm.value.fileName = typeof result === 'string'
+      ? (result.split(/[/\\]/).pop() || result)
+      : result
   }
 }
 
