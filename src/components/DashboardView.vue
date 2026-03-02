@@ -69,15 +69,15 @@ function computeStatus(value: number, thresholdsJson: string): 'good' | 'warn' |
 const statusLabels: Record<string, string> = { good: '良好', warn: '注意', bad: '異常' }
 
 // ── Filter logic ──
-// Uses a CTE to replace `financial_report` with filtered version
+// Replaces `financial_report` with a filtered subquery inline
+// This works both at top-level and inside subqueries (unlike CTE approach)
 function applyFilters(sql: string): string {
   const conditions: string[] = []
   if (filterPeriod.value) conditions.push(`period='${filterPeriod.value.replace(/'/g, "''")}'`)
   if (filterFactoryId.value) conditions.push(`factory_id=${Number(filterFactoryId.value)}`)
   if (conditions.length === 0) return sql
   const where = conditions.join(' AND ')
-  const cte = `WITH _filtered_fr AS (SELECT * FROM financial_report WHERE ${where})`
-  return cte + ' ' + sql.replace(/financial_report/g, '_filtered_fr')
+  return sql.replace(/\bfinancial_report\b/g, `(SELECT * FROM financial_report WHERE ${where})`)
 }
 
 function buildKpiWhere(): { where: string; params: unknown[] } {

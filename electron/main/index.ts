@@ -95,11 +95,14 @@ function registerIpcHandlers(): void {
         { name: '廠區F', location: '成都' },
         { name: '廠區G', location: '武漢' },
       ]
+      const factoryIds: number[] = []
       for (const f of factories) {
         dbService.execute(
           `INSERT OR IGNORE INTO factory (name, location) VALUES (?, ?)`,
           [f.name, f.location]
         )
+        const r = dbService.execute('SELECT id FROM factory WHERE name = ?', [f.name])
+        factoryIds.push((r.rows?.[0]?.id as number) ?? 0)
       }
 
       // 財報數據
@@ -132,7 +135,7 @@ function registerIpcHandlers(): void {
             const jitter = 1 + (Math.random() - 0.5) * 0.06
             return Math.round(scaled * jitter * 100) / 100
           })
-          dbService.execute(insertSql, [periods[pi], fi + 1, ...values])
+          dbService.execute(insertSql, [periods[pi], factoryIds[fi], ...values])
         }
       }
 
