@@ -1,0 +1,2 @@
+ALTER TABLE dashboard ADD COLUMN analysis TEXT DEFAULT '';
+ALTER TABLE dashboard ADD COLUMN actions TEXT DEFAULT ''

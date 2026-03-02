@@ -3,7 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { X, Save, ChevronUp, ChevronDown, Columns2, RectangleHorizontal } from 'lucide-vue-next'
 
 interface Dashboard {
-  id: number; name: string; description: string; sort_order: number
+  id: number; name: string; description: string; sort_order: number; analysis?: string; actions?: string
 }
 interface AvailableItem {
   id: number; name: string; type: 'chart' | 'metric'; category?: string
@@ -19,7 +19,7 @@ interface SelectedItem {
 const props = defineProps<{ dashboard: Dashboard | null }>()
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 
-const form = ref({ name: '', description: '', sort_order: 0 })
+const form = ref({ name: '', description: '', sort_order: 0, analysis: '', actions: '' })
 const selectedItems = ref<SelectedItem[]>([])
 const availableCharts = ref<AvailableItem[]>([])
 const availableMetrics = ref<AvailableItem[]>([])
@@ -28,9 +28,9 @@ const error = ref('')
 
 watch(() => props.dashboard, (d) => {
   if (d) {
-    form.value = { name: d.name, description: d.description || '', sort_order: d.sort_order }
+    form.value = { name: d.name, description: d.description || '', sort_order: d.sort_order, analysis: (d as any).analysis || '', actions: (d as any).actions || '' }
   } else {
-    form.value = { name: '', description: '', sort_order: 0 }
+    form.value = { name: '', description: '', sort_order: 0, analysis: '', actions: '' }
   }
   selectedItems.value = []
   error.value = ''
@@ -116,16 +116,16 @@ async function save() {
     let dashboardId: number
     if (props.dashboard) {
       await window.db.execute(
-        `UPDATE dashboard SET name=?, description=?, sort_order=? WHERE id=?`,
-        [form.value.name, form.value.description, form.value.sort_order, props.dashboard.id]
+        `UPDATE dashboard SET name=?, description=?, sort_order=?, analysis=?, actions=? WHERE id=?`,
+        [form.value.name, form.value.description, form.value.sort_order, form.value.analysis, form.value.actions, props.dashboard.id]
       )
       dashboardId = props.dashboard.id
       // 清除舊 items
       await window.db.execute('DELETE FROM dashboard_item WHERE dashboard_id=?', [dashboardId])
     } else {
       const res = await window.db.execute(
-        `INSERT INTO dashboard (name, description, sort_order) VALUES (?, ?, ?)`,
-        [form.value.name, form.value.description, form.value.sort_order]
+        `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?)`,
+        [form.value.name, form.value.description, form.value.sort_order, form.value.analysis, form.value.actions]
       )
       // 取新 id
       const idRes = await window.db.execute('SELECT last_insert_rowid() as id')
@@ -166,6 +166,16 @@ async function save() {
         <div class="field">
           <label>說明</label>
           <input v-model="form.description" placeholder="這個儀表板的用途" />
+        </div>
+
+        <!-- 智能分析與建議動作 -->
+        <div class="section-title">智能分析</div>
+        <div class="field">
+          <textarea v-model="form.analysis" rows="4" placeholder="針對此儀表板的數據分析摘要"></textarea>
+        </div>
+        <div class="section-title">建議動作</div>
+        <div class="field">
+          <textarea v-model="form.actions" rows="4" placeholder="每行一條建議，例如：&#10;1. 檢討銷管研費用結構&#10;2. 設定下一年度營收目標"></textarea>
         </div>
 
         <!-- 選擇圖表 -->
@@ -270,7 +280,12 @@ async function save() {
   width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;
   font-size: 13px; color: #111827; box-sizing: border-box;
 }
-.field input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+.field input:focus, .field textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+.field textarea {
+  width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 13px; color: #111827; box-sizing: border-box; font-family: inherit;
+  resize: vertical; line-height: 1.6;
+}
 
 .empty-hint { font-size: 13px; color: #9ca3af; padding: 8px 0; }
 

@@ -1,0 +1,1 @@
+ALTER TABLE chart ADD COLUMN category TEXT DEFAULT ''

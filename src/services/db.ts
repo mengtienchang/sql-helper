@@ -118,6 +118,11 @@ ALTER TABLE metric ADD COLUMN thresholds TEXT DEFAULT ''`,
     name: '009_chart_category.sql',
     sql: `ALTER TABLE chart ADD COLUMN category TEXT DEFAULT ''`,
   },
+  {
+    name: '010_dashboard_story.sql',
+    sql: `ALTER TABLE dashboard ADD COLUMN analysis TEXT DEFAULT '';
+ALTER TABLE dashboard ADD COLUMN actions TEXT DEFAULT ''`,
+  },
 ]
 
 // ---- IndexedDB helpers ----
@@ -391,14 +396,34 @@ function seed() {
 
     // ── 儀表板 ──
     const dashboardDefs = [
-      { name: '綜合總覽', description: '一眼看全局：營收、成本、獲利、庫存關鍵指標', sort_order: 0 },
-      { name: '時間趨勢分析', description: '各項指標的季度走勢與變化', sort_order: 1 },
-      { name: '廠區比較分析', description: '各廠區績效、成本與效率對比', sort_order: 2 },
-      { name: '獲利深度分析', description: '利潤率、報酬率、邊際貢獻深入分析', sort_order: 3 },
-      { name: '成本與損益', description: '成本結構、損益平衡與效率追蹤', sort_order: 4 },
+      {
+        name: '綜合總覽', description: '一眼看全局：營收、成本、獲利、庫存關鍵指標', sort_order: 0,
+        analysis: '從整體趨勢來看，營收與利潤呈現穩定成長態勢，毛利率維持在合理區間。各廠區營收貢獻分佈不均，總部與廠區A為主要營收來源。成本結構中原材料佔比最高，需持續關注原物料價格波動對毛利的影響。庫存周轉天數整體偏高，存在資金佔用風險。',
+        actions: '1. 針對營收貢獻較低的廠區（廠區F、G），評估產能利用率並制定提升計畫\n2. 建立原材料價格預警機制，當價格波動超過 5% 時啟動成本轉嫁或替代方案\n3. 將庫存周轉天數目標設定為降低 10%，各廠區分別制定改善行動方案\n4. 每月追蹤毛利率變化，若連續兩季下降超過 1% 則啟動專案檢討',
+      },
+      {
+        name: '時間趨勢分析', description: '各項指標的季度走勢與變化', sort_order: 1,
+        analysis: '從 2023 年至今，營收呈現逐季成長趨勢，年複合成長率約 16%。獲利率方面，毛利率穩定維持在 19-21% 之間，但營業利潤率有微幅下降趨勢，顯示銷管研費用成長速度略高於營收成長。成本結構中，變動成本隨營收同步上升，但固定成本增幅較低，規模效應逐漸顯現。ROE 和 ROA 均呈穩步上升，資本運用效率持續改善。',
+        actions: '1. 檢討銷管研費用結構，識別可優化項目，目標將費用率控制在 8% 以內\n2. 持續擴大營收規模以發揮固定成本的規模效應\n3. 關注 Q4 季節性波動，提前做好庫存與產能規劃\n4. 設定下一年度營收成長目標 15%，搭配利潤率維持計畫',
+      },
+      {
+        name: '廠區比較分析', description: '各廠區績效、成本與效率對比', sort_order: 2,
+        analysis: '廠區間績效差異顯著：總部與廠區A營收佔比合計超過 40%，為核心產能基地。廠區B、C 獲利率表現優異，成本控制能力較強。廠區F、G 規模較小但獲利率偏低，可能存在產能未充分利用的問題。庫存周轉方面，各廠區差異不大，但廠區D 的模具周轉天數偏高，需要關注。',
+        actions: '1. 對廠區F、G 進行產能利用率診斷，評估是否需要調整產品線或轉移訂單\n2. 將廠區B、C 的成本管控最佳實踐推廣至其他廠區\n3. 廠區D 需制定模具庫存專項改善計畫，目標降低 20%\n4. 評估是否將部分低毛利產品從高成本廠區轉移至成本較低的廠區',
+      },
+      {
+        name: '獲利深度分析', description: '利潤率、報酬率、邊際貢獻深入分析', sort_order: 3,
+        analysis: '整體獲利能力穩健，產品邊際貢獻率維持在 30% 以上水準。營業利潤率受銷管研費用影響，實際值約在 10-12% 區間。ROE 表現良好（8% 以上），顯示股東資金運用效率佳。各廠區中，邊際貢獻與固定成本的比例差異明顯，部分廠區的邊際貢獻剛好覆蓋固定成本，安全邊際不足。',
+        actions: '1. 針對邊際貢獻率低於 28% 的產品線進行檢討，考慮提價或降低變動成本\n2. 安全邊際不足的廠區（邊際貢獻/固定成本 < 1.5），需制定營收提升或成本削減方案\n3. 持續追蹤 ROE 目標 10%，若低於 8% 則啟動資本結構優化\n4. 建立產品獲利分析制度，每季更新各產品線的邊際貢獻排名',
+      },
+      {
+        name: '成本與損益', description: '成本結構、損益平衡與效率追蹤', sort_order: 4,
+        analysis: '成本結構以原材料為主（約佔 50%），人工成本次之（約佔 19%）。變動成本與固定成本比約為 4:1，顯示成本彈性較大。損益平衡點分析顯示，目前營收已超過損益平衡點約 60-70%，安全邊際充足。但隨著固定成本（特別是廠房設備）逐年增加，損益平衡點也在上升，需要持續關注。',
+        actions: '1. 建立成本監控儀表板，每月追蹤各成本項目的變動趨勢\n2. 原材料成本佔比過高，探索集中採購、長約鎖價等降本策略\n3. 評估自動化投資效益，以固定成本替代部分變動人工成本，長期降低單位成本\n4. 設定安全邊際預警線（實際營收/損益平衡點 < 1.3），觸發時啟動成本削減措施',
+      },
     ]
     for (const d of dashboardDefs) {
-      execute('INSERT OR IGNORE INTO dashboard (name, description, sort_order) VALUES (?, ?, ?)', [d.name, d.description, d.sort_order])
+      execute('INSERT OR IGNORE INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?)', [d.name, d.description, d.sort_order, d.analysis, d.actions])
     }
 
     const getId = (table: string, name: string): number | null => {

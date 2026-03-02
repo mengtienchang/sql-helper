@@ -9,7 +9,7 @@ import {
 import VChart from 'vue-echarts'
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3,
-  PieChart, Activity, LayoutDashboard,
+  PieChart, Activity, LayoutDashboard, Lightbulb, Target,
 } from 'lucide-vue-next'
 import { buildChartOption } from '../composables/useChartRenderer'
 
@@ -22,7 +22,7 @@ interface KPI {
   label: string; value: string; trend?: string; up?: boolean; icon: string
 }
 interface DashboardDef {
-  id: number; name: string; description: string
+  id: number; name: string; description: string; analysis: string; actions: string
 }
 interface RenderItem {
   key: string
@@ -67,6 +67,7 @@ onMounted(async () => {
 
 watch(activeDashboardId, (id) => {
   if (id !== null) loadDashboardItems(id)
+  activeDashboard.value = dashboards.value.find(d => d.id === id) ?? null
 })
 
 async function loadKPIs() {
@@ -130,12 +131,17 @@ async function loadKPIs() {
 }
 
 async function loadDashboards() {
-  const res = await window.db.execute('SELECT id, name, description FROM dashboard ORDER BY sort_order, id')
+  const res = await window.db.execute('SELECT id, name, description, analysis, actions FROM dashboard ORDER BY sort_order, id')
   if (res.success && res.rows?.length) {
-    dashboards.value = res.rows as any[]
+    dashboards.value = res.rows.map((r: any) => ({
+      id: r.id, name: r.name, description: r.description || '',
+      analysis: r.analysis || '', actions: r.actions || '',
+    }))
     activeDashboardId.value = dashboards.value[0].id
   }
 }
+
+const activeDashboard = ref<DashboardDef | null>(null)
 
 async function loadDashboardItems(dashboardId: number) {
   loading.value = true
@@ -244,6 +250,11 @@ const iconMap: Record<string, any> = {
         </div>
       </div>
 
+      <!-- Dashboard description -->
+      <div v-if="activeDashboard?.description" class="dashboard-desc">
+        {{ activeDashboard.description }}
+      </div>
+
       <!-- Dashboard items -->
       <div v-if="loading" class="loading-hint">載入中...</div>
 
@@ -252,39 +263,69 @@ const iconMap: Record<string, any> = {
         <p>{{ dashboards.length ? '此儀表板尚無內容，到管理頁編輯' : '尚無儀表板，到管理頁新增' }}</p>
       </div>
 
-      <div v-else class="items-grid">
-        <div
-          v-for="item in renderItems"
-          :key="item.key"
-          :class="['grid-item', { full: item.colSpan === 2 }]"
-        >
-          <div v-if="item.type === 'chart'" class="chart-card">
-            <h3>{{ item.name }}</h3>
-            <VChart :option="item.chartOption" class="chart" autoresize />
-          </div>
-          <div v-else class="metric-card">
-            <div class="metric-header">
-              <div class="metric-category">{{ item.metricCategory }}</div>
-              <div v-if="item.metricStatus" :class="['status-dot', item.metricStatus]" :title="statusLabels[item.metricStatus]"></div>
+      <template v-else>
+        <!-- Charts section -->
+        <div class="items-grid">
+          <div
+            v-for="item in renderItems"
+            :key="item.key"
+            :class="['grid-item', { full: item.colSpan === 2 }]"
+          >
+            <div v-if="item.type === 'chart'" class="chart-card">
+              <h3>{{ item.name }}</h3>
+              <VChart :option="item.chartOption" class="chart" autoresize />
             </div>
-            <div class="metric-name">{{ item.name }}</div>
-            <div class="metric-value-row">
-              <span class="metric-value" :class="item.metricStatus">{{ item.metricValue }}</span>
-              <span v-if="item.metricStatus" :class="['status-label', item.metricStatus]">{{ statusLabels[item.metricStatus] }}</span>
-            </div>
-            <!-- Popover -->
-            <div v-if="item.metricDescription" class="metric-popover">
-              <div class="popover-content">
-                <div class="popover-title">{{ item.name }}</div>
-                <div class="popover-desc">{{ item.metricDescription }}</div>
-                <div v-if="item.metricStatus" class="popover-status">
-                  目前狀態：<span :class="['popover-status-text', item.metricStatus]">{{ statusLabels[item.metricStatus] }}</span>
+            <div v-else class="metric-card">
+              <div class="metric-header">
+                <div class="metric-category">{{ item.metricCategory }}</div>
+                <div v-if="item.metricStatus" :class="['status-dot', item.metricStatus]" :title="statusLabels[item.metricStatus]"></div>
+              </div>
+              <div class="metric-name">{{ item.name }}</div>
+              <div class="metric-value-row">
+                <span class="metric-value" :class="item.metricStatus">{{ item.metricValue }}</span>
+                <span v-if="item.metricStatus" :class="['status-label', item.metricStatus]">{{ statusLabels[item.metricStatus] }}</span>
+              </div>
+              <!-- Popover -->
+              <div v-if="item.metricDescription" class="metric-popover">
+                <div class="popover-content">
+                  <div class="popover-title">{{ item.name }}</div>
+                  <div class="popover-desc">{{ item.metricDescription }}</div>
+                  <div v-if="item.metricStatus" class="popover-status">
+                    目前狀態：<span :class="['popover-status-text', item.metricStatus]">{{ statusLabels[item.metricStatus] }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+
+        <!-- Story section: analysis + actions -->
+        <div v-if="activeDashboard?.analysis || activeDashboard?.actions" class="story-section">
+          <div v-if="activeDashboard?.analysis" class="story-card analysis-card">
+            <div class="story-card-header">
+              <div class="story-icon analysis-icon">
+                <Lightbulb :size="18" />
+              </div>
+              <h3>智能分析</h3>
+            </div>
+            <div class="story-content">{{ activeDashboard.analysis }}</div>
+          </div>
+
+          <div v-if="activeDashboard?.actions" class="story-card actions-card">
+            <div class="story-card-header">
+              <div class="story-icon actions-icon">
+                <Target :size="18" />
+              </div>
+              <h3>建議動作</h3>
+            </div>
+            <ul class="actions-list">
+              <li v-for="(action, idx) in activeDashboard.actions.split('\n').filter(a => a.trim())" :key="idx">
+                {{ action.replace(/^\d+\.\s*/, '') }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -369,6 +410,47 @@ const iconMap: Record<string, any> = {
 .status-label.good { background: #dcfce7; color: #16a34a; }
 .status-label.warn { background: #fef3c7; color: #d97706; }
 .status-label.bad { background: #fef2f2; color: #dc2626; }
+
+.dashboard-desc {
+  font-size: 13px; color: #6b7280; margin-bottom: 20px;
+  padding: 10px 14px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6;
+}
+
+/* Story section */
+.story-section {
+  margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.story-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  padding: 20px; transition: box-shadow 0.2s;
+}
+.story-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.story-card-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.story-card-header h3 {
+  font-size: 15px; font-weight: 600; color: #111827; margin: 0;
+}
+.story-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.analysis-icon { background: #ede9fe; color: #7c3aed; }
+.actions-icon { background: #dbeafe; color: #2563eb; }
+.analysis-card { border-left: 3px solid #7c3aed; }
+.actions-card { border-left: 3px solid #2563eb; }
+.story-content {
+  font-size: 13px; line-height: 1.8; color: #374151;
+}
+.actions-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.actions-list li {
+  font-size: 13px; line-height: 1.6; color: #374151;
+  padding: 8px 12px; background: #f8fafc; border-radius: 6px;
+  border-left: 2px solid #2563eb; position: relative;
+}
 
 /* Popover */
 .metric-popover {
