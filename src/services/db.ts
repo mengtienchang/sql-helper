@@ -176,7 +176,10 @@ function execute(sql: string, params?: unknown[]) {
     stmt.free()
     return { type: 'select' as const, columns, rows }
   } else {
-    db.run(sql, params as any[])
+    const stmt = db.prepare(sql)
+    if (params) stmt.bind(params as any[])
+    stmt.step()
+    stmt.free()
     const changes = db.getRowsModified()
     save()
     return { type: 'modify' as const, changes }
@@ -207,9 +210,10 @@ function runMigrations(): void {
           console.warn(`[migration] ${m.name} statement failed:`, err)
         }
       }
-      // 用字串拼接避免 sql.js 瀏覽器版參數綁定問題
-      const safeName = m.name.replace(/'/g, "''")
-      db.run(`INSERT INTO _migrations (name) VALUES ('${safeName}')`)
+      const stmt = db.prepare('INSERT INTO _migrations (name) VALUES (?)')
+      stmt.bind([m.name])
+      stmt.step()
+      stmt.free()
       console.log(`[migration] executed: ${m.name}`)
     } catch (err) {
       console.error(`[migration] ${m.name} failed:`, err)
