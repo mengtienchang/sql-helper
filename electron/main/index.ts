@@ -76,6 +76,14 @@ function registerIpcHandlers(): void {
       return { success: false, message: 'Database not ready' }
     }
     try {
+      // 清除舊資料，重新產生
+      dbService.execute('DELETE FROM dashboard_item')
+      dbService.execute('DELETE FROM dashboard')
+      dbService.execute('DELETE FROM chart')
+      dbService.execute('DELETE FROM metric')
+      dbService.execute('DELETE FROM financial_report')
+      dbService.execute('DELETE FROM factory')
+
       // 廠區
       const factories = [
         { name: '總部', location: '台北' },

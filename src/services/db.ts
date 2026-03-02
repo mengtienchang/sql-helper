@@ -245,6 +245,14 @@ export function getDB() { return db }
 function seed() {
   if (!db) return { success: false, message: 'Database not ready' }
   try {
+    // 清除舊資料，重新產生
+    db.run('DELETE FROM dashboard_item')
+    db.run('DELETE FROM dashboard')
+    db.run('DELETE FROM chart')
+    db.run('DELETE FROM metric')
+    db.run('DELETE FROM financial_report')
+    db.run('DELETE FROM factory')
+
     const factories = [
       { name: '總部', location: '台北' },
       { name: '廠區A', location: '昆山' },
