@@ -27,7 +27,7 @@ onMounted(() => {
   if (!localStorage.getItem('tour_completed')) {
     setTimeout(() => { tourVisible.value = true }, 600)
   }
-  window.menu.onStartTour(() => { tourVisible.value = true })
+  window.menu?.onStartTour(() => { tourVisible.value = true })
 })
 
 function startTour() {
