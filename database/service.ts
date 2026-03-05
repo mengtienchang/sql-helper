@@ -33,6 +33,7 @@ export class DatabaseService {
       this.db = new SQL.Database()
     }
     this.runMigrations()
+    this.db.run('PRAGMA foreign_keys = ON')
     this.save()
   }
 

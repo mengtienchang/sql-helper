@@ -240,6 +240,7 @@ export async function initWebDB(): Promise<void> {
   const saved = await loadFromIDB()
   db = saved ? new SQL.Database(saved) : new SQL.Database()
   runMigrations()
+  db.run('PRAGMA foreign_keys = ON')
   save()
   console.log('[web-db] initialized')
 }
