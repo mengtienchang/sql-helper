@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS chart (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  id             INTEGER PRIMARY KEY,
   name           TEXT NOT NULL UNIQUE,
   chart_type     TEXT NOT NULL DEFAULT 'line',
   sql            TEXT NOT NULL,
@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS chart (
   enabled        INTEGER NOT NULL DEFAULT 1,
   sort_order     INTEGER NOT NULL DEFAULT 0,
   description    TEXT,
-  created_at     TEXT DEFAULT (datetime('now'))
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

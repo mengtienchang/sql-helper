@@ -12,7 +12,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['sql.js', 'xlsx'],
+              external: ['duckdb', 'xlsx'],
             },
           },
         },

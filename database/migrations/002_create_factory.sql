@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS factory (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   location TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 ALTER TABLE financial_report ADD COLUMN factory_id INTEGER REFERENCES factory(id);

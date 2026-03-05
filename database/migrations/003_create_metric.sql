@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS metric (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   category TEXT NOT NULL,
   sql TEXT NOT NULL,
   description TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -1,7 +1,7 @@
 {
   "name": "sql-helper",
   "version": "0.1.0",
-  "description": "智能財報助手 — Desktop SQLite database helper",
+  "description": "智能財報助手 — Desktop DuckDB database helper",
   "author": "sql-helper",
   "main": "dist-electron/index.js",
   "scripts": {
@@ -29,23 +29,25 @@
       {
         "from": "database/migrations",
         "to": "database/migrations",
-        "filter": ["*.sql"]
-      },
-      {
-        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
-        "to": "sql-wasm.wasm"
+        "filter": [
+          "*.sql"
+        ]
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.utilities"
     },
     "nsis": {
@@ -57,9 +59,10 @@
     }
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.33.1-dev20.0",
+    "duckdb": "^1.4.4",
     "echarts": "^6.0.0",
     "lucide-vue-next": "^0.575.0",
-    "sql.js": "^1.11.0",
     "vue": "^3.5.13",
     "vue-echarts": "^8.0.1",
     "xlsx": "^0.18.5"

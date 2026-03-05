@@ -124,12 +124,10 @@ async function save() {
       await window.db.execute('DELETE FROM dashboard_item WHERE dashboard_id=?', [dashboardId])
     } else {
       const res = await window.db.execute(
-        `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) RETURNING id`,
         [form.value.name, form.value.description, form.value.sort_order, form.value.analysis, form.value.actions]
       )
-      // 取新 id
-      const idRes = await window.db.execute('SELECT last_insert_rowid() as id')
-      dashboardId = (idRes.rows?.[0] as any)?.id ?? 0
+      dashboardId = (res.rows?.[0] as any)?.id ?? 0
     }
 
     // 插入 items

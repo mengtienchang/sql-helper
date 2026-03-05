@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS financial_report (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id INTEGER PRIMARY KEY,
   period TEXT NOT NULL,
 
   -- 營收與產值
@@ -69,5 +69,5 @@ CREATE TABLE IF NOT EXISTS financial_report (
   股東權益_平均 REAL,
   總資產_年平均 REAL,
 
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

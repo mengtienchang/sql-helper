@@ -47,6 +47,15 @@ interface Window {
     simple(data: { columns: string[]; rows: Record<string, unknown>[] }): Promise<{ success: boolean; message?: string }>
     showOpenDialog(): Promise<string | null>
   }
+  imp: {
+    showOpenDialog?: () => Promise<string | null>
+    preview(fileOrPath: any): Promise<{
+      success: boolean; columns: string[]; rows: Record<string, unknown>[]; totalRows: number; message?: string
+    }>
+    execute(fileOrPath: any, tableName: string, mode: string): Promise<{
+      success: boolean; message: string; rowCount?: number
+    }>
+  }
   menu: {
     onStartTour(callback: () => void): void
   }

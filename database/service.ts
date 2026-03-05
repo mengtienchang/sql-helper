@@ -1,5 +1,5 @@
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs'
+import duckdb from 'duckdb'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, dirname } from 'path'
 
 export interface QueryResult {
@@ -10,7 +10,8 @@ export interface QueryResult {
 }
 
 export class DatabaseService {
-  private db: SqlJsDatabase | null = null
+  private db: duckdb.Database | null = null
+  private conn: duckdb.Connection | null = null
   private filePath: string
   private migrationsDir: string
 
@@ -19,90 +20,66 @@ export class DatabaseService {
     this.migrationsDir = migrationsDir ?? join(dirname(filePath), 'migrations')
   }
 
-  async init(wasmPath?: string): Promise<void> {
-    const initOptions: Record<string, unknown> = {}
-    if (wasmPath && existsSync(wasmPath)) {
-      initOptions.wasmBinary = readFileSync(wasmPath)
-    }
-    const SQL = await initSqlJs(initOptions as any)
-
-    if (existsSync(this.filePath)) {
-      const buffer = readFileSync(this.filePath)
-      this.db = new SQL.Database(buffer)
-    } else {
-      this.db = new SQL.Database()
-    }
-    this.runMigrations()
-    this.db.run('PRAGMA foreign_keys = ON')
-    this.save()
+  async init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db = new duckdb.Database(this.filePath, (err) => {
+        if (err) return reject(err)
+        this.conn = (this.db as duckdb.Database).connect()
+        this.runMigrations().then(resolve).catch(reject)
+      })
+    })
   }
 
-  execute(sql: string, params?: unknown[]): QueryResult {
-    if (!this.db) throw new Error('Database not initialized')
-
+  async execute(sql: string, params?: unknown[]): Promise<QueryResult> {
+    if (!this.conn) throw new Error('Database not initialized')
     const trimmed = sql.trim().toUpperCase()
 
-    if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA') || trimmed.startsWith('EXPLAIN')) {
-      const stmt = this.db.prepare(sql)
-      if (params) stmt.bind(params)
+    const isSelect = trimmed.startsWith('SELECT') ||
+      trimmed.startsWith('EXPLAIN') ||
+      trimmed.startsWith('SHOW') ||
+      trimmed.startsWith('DESCRIBE') ||
+      trimmed.startsWith('WITH') ||
+      /\bRETURNING\b/.test(trimmed)
 
-      const columns: string[] = []
-      const rows: Record<string, unknown>[] = []
-
-      while (stmt.step()) {
-        if (columns.length === 0) {
-          columns.push(...stmt.getColumnNames())
-        }
-        const values = stmt.get()
-        const row: Record<string, unknown> = {}
-        columns.forEach((col, i) => {
-          row[col] = values[i]
+    if (isSelect) {
+      return new Promise((resolve, reject) => {
+        this.conn!.all(sql, ...(params ?? []), (err: Error | null, rows: Record<string, unknown>[]) => {
+          if (err) return reject(err)
+          const resultRows = rows ?? []
+          const columns = resultRows.length > 0 ? Object.keys(resultRows[0]) : []
+          resolve({ type: 'select', columns, rows: resultRows })
         })
-        rows.push(row)
-      }
-      stmt.free()
-
-      return { type: 'select', columns, rows }
+      })
     } else {
-      this.db.run(sql, params)
-      const changes = this.db.getRowsModified()
-      this.save()
-      return { type: 'modify', changes }
+      return new Promise((resolve, reject) => {
+        this.conn!.run(sql, ...(params ?? []), (err: Error | null) => {
+          if (err) return reject(err)
+          resolve({ type: 'modify', changes: 0 })
+        })
+      })
     }
   }
 
-  getTables(): string[] {
-    if (!this.db) throw new Error('Database not initialized')
-    const stmt = this.db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+  async getTables(): Promise<string[]> {
+    const result = await this.execute(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'main' AND table_type = 'BASE TABLE'
+       AND table_name NOT LIKE '\\_%' ESCAPE '\\'
+       ORDER BY table_name`
     )
-    const tables: string[] = []
-    while (stmt.step()) {
-      tables.push(stmt.get()[0] as string)
-    }
-    stmt.free()
-    return tables
+    return (result.rows ?? []).map(r => r.table_name as string)
   }
 
-  private runMigrations(): void {
-    if (!this.db) return
-
-    // 建立 migration 追蹤表
-    this.db.run(`CREATE TABLE IF NOT EXISTS _migrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  private async runMigrations(): Promise<void> {
+    await this.execute(`CREATE TABLE IF NOT EXISTS _migrations (
+      id INTEGER PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
-      executed_at TEXT DEFAULT (datetime('now'))
+      executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`)
 
-    // 讀取已執行的 migration
-    const executed = new Set<string>()
-    const stmt = this.db.prepare(`SELECT name FROM _migrations`)
-    while (stmt.step()) {
-      executed.add(stmt.get()[0] as string)
-    }
-    stmt.free()
+    const result = await this.execute('SELECT name FROM _migrations')
+    const executed = new Set((result.rows ?? []).map(r => r.name as string))
 
-    // 讀取 migrations 資料夾中的 .sql 檔案
     if (!existsSync(this.migrationsDir)) return
 
     const files = readdirSync(this.migrationsDir)
@@ -111,28 +88,25 @@ export class DatabaseService {
 
     for (const file of files) {
       if (executed.has(file)) continue
-
       const sql = readFileSync(join(this.migrationsDir, file), 'utf-8')
       const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0)
       for (const statement of statements) {
-        this.db.run(statement)
+        await this.execute(statement)
       }
-      this.db.run(`INSERT INTO _migrations (name) VALUES (?)`, [file])
+      await this.execute('INSERT INTO _migrations (name) VALUES (?)', [file])
       console.log(`[migration] executed: ${file}`)
     }
   }
 
   save(): void {
-    if (!this.db) return
-    const data = this.db.export()
-    writeFileSync(this.filePath, Buffer.from(data))
+    // DuckDB auto-persists, no-op
   }
 
   close(): void {
     if (this.db) {
-      this.save()
       this.db.close()
       this.db = null
+      this.conn = null
     }
   }
 }

@@ -29,6 +29,12 @@ const exportApi = {
   showOpenDialog: () => ipcRenderer.invoke('file:showOpenDialog'),
 }
 
+const importApi = {
+  showOpenDialog: () => ipcRenderer.invoke('import:showOpenDialog'),
+  preview: (filePath: string) => ipcRenderer.invoke('import:preview', filePath),
+  execute: (filePath: string, tableName: string, mode: string) => ipcRenderer.invoke('import:execute', filePath, tableName, mode),
+}
+
 const menuApi = {
   onStartTour: (callback: () => void) => {
     ipcRenderer.on('menu:startTour', () => callback())
@@ -39,4 +45,5 @@ contextBridge.exposeInMainWorld('db', dbApi)
 contextBridge.exposeInMainWorld('setting', settingApi)
 contextBridge.exposeInMainWorld('chat', chatApi)
 contextBridge.exposeInMainWorld('export', exportApi)
+contextBridge.exposeInMainWorld('imp', importApi)
 contextBridge.exposeInMainWorld('menu', menuApi)

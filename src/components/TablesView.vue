@@ -10,6 +10,17 @@ import {
 interface ColInfo {
   cid: number; name: string; type: string; notnull: number; dflt_value: any; pk: number
 }
+/** Map information_schema row → ColInfo */
+function toColInfo(r: Record<string, unknown>, idx: number): ColInfo {
+  return {
+    cid: idx,
+    name: r.column_name as string,
+    type: (r.data_type as string) ?? 'TEXT',
+    notnull: r.is_nullable === 'NO' ? 1 : 0,
+    dflt_value: r.column_default ?? null,
+    pk: (r.constraint_type === 'PRIMARY KEY') ? 1 : 0,
+  }
+}
 interface Row { [key: string]: unknown }
 interface FKInfo {
   id: number; seq: number; table: string; from: string; to: string
@@ -138,14 +149,36 @@ async function loadTableData() {
   loading.value = true
   errorMsg.value = ''
   try {
-    // Schema
-    const schemaResult = await window.db.execute(`PRAGMA table_info('${activeTable.value}')`)
-    if (schemaResult.success) columns.value = schemaResult.rows as unknown as ColInfo[]
+    // Schema via information_schema
+    const schemaResult = await window.db.execute(
+      `SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+              CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN 'PRIMARY KEY' ELSE NULL END as constraint_type
+       FROM information_schema.columns c
+       LEFT JOIN information_schema.key_column_usage kcu
+         ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
+       LEFT JOIN information_schema.table_constraints tc
+         ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
+       WHERE c.table_schema = 'main' AND c.table_name = ?
+       ORDER BY c.ordinal_position`, [activeTable.value]
+    )
+    if (schemaResult.success) columns.value = (schemaResult.rows as Record<string, unknown>[]).map(toColInfo)
 
-    // FK info
-    const fkResult = await window.db.execute(`PRAGMA foreign_key_list('${activeTable.value}')`)
-    if (fkResult.success) fkInfos.value = fkResult.rows as unknown as FKInfo[]
-    else fkInfos.value = []
+    // FK info via information_schema
+    const fkResult = await window.db.execute(
+      `SELECT rc.constraint_name, kcu.column_name as "from",
+              ccu.table_name as "table", ccu.column_name as "to"
+       FROM information_schema.referential_constraints rc
+       JOIN information_schema.key_column_usage kcu
+         ON rc.constraint_name = kcu.constraint_name
+       JOIN information_schema.key_column_usage ccu
+         ON rc.unique_constraint_name = ccu.constraint_name
+       WHERE kcu.table_schema = 'main' AND kcu.table_name = ?`, [activeTable.value]
+    )
+    if (fkResult.success) {
+      fkInfos.value = (fkResult.rows as Record<string, unknown>[]).map((r, i) => ({
+        id: i, seq: 0, table: r.table as string, from: r.from as string, to: r.to as string,
+      }))
+    } else fkInfos.value = []
 
     // Total count
     const countResult = await window.db.execute(`SELECT COUNT(*) as c FROM '${activeTable.value}'${searchWhere()}`)
@@ -199,8 +232,18 @@ async function loadFKOptions() {
     if (opts[key]) continue
     try {
       // Find a display column (first TEXT column or the referenced column)
-      const colsResult = await window.db.execute(`PRAGMA table_info('${fk.table}')`)
-      const refCols = colsResult.success ? colsResult.rows as unknown as ColInfo[] : []
+      const colsResult = await window.db.execute(
+        `SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+                CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN 'PRIMARY KEY' ELSE NULL END as constraint_type
+         FROM information_schema.columns c
+         LEFT JOIN information_schema.key_column_usage kcu
+           ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
+         LEFT JOIN information_schema.table_constraints tc
+           ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
+         WHERE c.table_schema = 'main' AND c.table_name = ?
+         ORDER BY c.ordinal_position`, [fk.table]
+      )
+      const refCols = colsResult.success ? (colsResult.rows as Record<string, unknown>[]).map(toColInfo) : []
       const textCol = refCols.find(c => !c.pk && (c.type.toUpperCase().includes('TEXT') || c.type.toUpperCase().includes('CHAR')))
       const displayCol = textCol ? textCol.name : fk.to
 
@@ -272,9 +315,19 @@ async function loadFKTargets() {
 
 async function loadFKTargetCols(tableName: string) {
   if (fkTargetCols.value[tableName]) return
-  const result = await window.db.execute(`PRAGMA table_info('${tableName}')`)
+  const result = await window.db.execute(
+    `SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+            CASE WHEN tc.constraint_type = 'PRIMARY KEY' THEN 'PRIMARY KEY' ELSE NULL END as constraint_type
+     FROM information_schema.columns c
+     LEFT JOIN information_schema.key_column_usage kcu
+       ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
+     LEFT JOIN information_schema.table_constraints tc
+       ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
+     WHERE c.table_schema = 'main' AND c.table_name = ?
+     ORDER BY c.ordinal_position`, [tableName]
+  )
   if (result.success) {
-    fkTargetCols.value[tableName] = result.rows as unknown as ColInfo[]
+    fkTargetCols.value[tableName] = (result.rows as Record<string, unknown>[]).map(toColInfo)
   }
 }
 
@@ -313,7 +366,7 @@ async function createTable() {
   const validCols = newTableCols.value.filter(c => c.name.trim())
   if (validCols.length === 0) { alert('請至少新增一個欄位'); return }
 
-  const parts: string[] = ['id INTEGER PRIMARY KEY AUTOINCREMENT']
+  const parts: string[] = ['id INTEGER PRIMARY KEY']
   for (const c of validCols) {
     let def = `"${c.name.trim()}" ${c.type}`
     if (c.required) def += ' NOT NULL'

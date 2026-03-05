@@ -20,7 +20,6 @@ function pickFile(accept: string): Promise<File | null> {
   })
 }
 
-// internal: store picked file for saveTemplate
 let _pickedFile: File | null = null
 
 export const webExportApi = {
@@ -37,7 +36,7 @@ export const webExportApi = {
       if (!file) return { success: false, message: '請先選擇檔案' }
       const arrayBuffer = await file.arrayBuffer()
       const uint8 = new Uint8Array(arrayBuffer)
-      rawExecute(
+      await rawExecute(
         'INSERT INTO export_template (name, description, file_data, file_name) VALUES (?, ?, ?, ?)',
         [name, desc, uint8 as any, file.name],
       )
@@ -49,17 +48,17 @@ export const webExportApi = {
   },
 
   async getTemplates() {
-    const r = rawExecute('SELECT id, name, description, file_name, created_at FROM export_template ORDER BY id')
+    const r = await rawExecute('SELECT id, name, description, file_name, created_at FROM export_template ORDER BY id')
     return r.rows ?? []
   },
 
   async deleteTemplate(id: number) {
-    rawExecute('DELETE FROM export_template WHERE id=?', [id])
+    await rawExecute('DELETE FROM export_template WHERE id=?', [id])
   },
 
   async scanVars(id: number) {
     try {
-      const r = rawExecute('SELECT file_data FROM export_template WHERE id=?', [id])
+      const r = await rawExecute('SELECT file_data FROM export_template WHERE id=?', [id])
       if (!r.rows?.length) return { success: false, vars: [] }
       const buf = (r.rows[0] as any).file_data
       const wb = XLSX.read(buf, { type: 'array' })
@@ -83,7 +82,7 @@ export const webExportApi = {
 
   async generate(id: number, vars: Record<string, string>) {
     try {
-      const r = rawExecute('SELECT file_data, file_name FROM export_template WHERE id=?', [id])
+      const r = await rawExecute('SELECT file_data, file_name FROM export_template WHERE id=?', [id])
       if (!r.rows?.length) return { success: false, message: '模板不存在' }
       const tmpl = r.rows[0] as any
       const wb = XLSX.read(tmpl.file_data, { type: 'array' })
@@ -106,7 +105,7 @@ export const webExportApi = {
           const sqlMatch = val.match(/^\{\{SQL:(.+)\}\}$/)
           if (sqlMatch) {
             try {
-              const result = rawExecute(sqlMatch[1])
+              const result = await rawExecute(sqlMatch[1])
               if (result.rows?.length && result.columns?.length) {
                 const firstVal = (result.rows[0] as any)[result.columns[0]]
                 if (typeof firstVal === 'number') { cell.t = 'n'; cell.v = firstVal }
@@ -118,7 +117,7 @@ export const webExportApi = {
 
         for (const tc of tableCells) {
           try {
-            const result = rawExecute(tc.sql)
+            const result = await rawExecute(tc.sql)
             if (result.rows?.length && result.columns?.length) {
               const decoded = XLSX.utils.decode_cell(tc.addr)
               const startRow = decoded.r
