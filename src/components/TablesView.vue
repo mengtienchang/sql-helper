@@ -63,12 +63,13 @@ async function loadTableData() {
   errorMsg.value = ''
   try {
     const schemaResult = await window.db.execute(`PRAGMA table_info('${activeTable.value}')`)
-    if (schemaResult.success) columns.value = schemaResult.rows as ColInfo[]
+    if (schemaResult.success) columns.value = schemaResult.rows as unknown as ColInfo[]
 
     const dataResult = await window.db.execute(`SELECT rowid as __rowid__, * FROM '${activeTable.value}' LIMIT 500`)
     if (dataResult.success) {
-      rowids.value = (dataResult.rows as Row[]).map(r => r.__rowid__ as number)
-      rows.value = (dataResult.rows as Row[]).map(r => {
+      const dataRows = dataResult.rows as unknown as Row[]
+      rowids.value = dataRows.map(r => r.__rowid__ as number)
+      rows.value = dataRows.map(r => {
         const { __rowid__, ...rest } = r
         return rest
       })
