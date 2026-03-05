@@ -592,10 +592,10 @@ refreshTables()
             <span class="row-count">{{ totalRows }} 筆資料・{{ columns.length }} 個欄位</span>
             <!-- View toggle -->
             <div class="view-toggle">
-              <button :class="['vt-btn', { active: viewMode === 'data' }]" @click="viewMode = 'data'" title="資料檢視">
+              <button :class="['vt-btn', { active: viewMode === 'data' }]" @click="viewMode = 'data'" title="資料檢視：查看表裡的實際資料">
                 <List :size="13" />
               </button>
-              <button :class="['vt-btn', { active: viewMode === 'structure' }]" @click="viewMode = 'structure'" title="結構檢視">
+              <button :class="['vt-btn', { active: viewMode === 'structure' }]" @click="viewMode = 'structure'" title="結構檢視：查看欄位設定（類型、約束、外鍵等）">
                 <Eye :size="13" />
               </button>
             </div>
@@ -611,19 +611,19 @@ refreshTables()
                 @input="onSearchInput"
               />
             </div>
-            <button class="btn-secondary sm" @click="openAddCol">
+            <button class="btn-secondary sm" @click="openAddCol" title="在這張表新增一個直欄（欄位）">
               <Columns :size="13" />
               新增欄位
             </button>
-            <button class="btn-secondary sm" @click="openInsertRow">
+            <button class="btn-secondary sm" @click="openInsertRow" title="新增一筆（橫列）資料">
               <PlusCircle :size="13" />
               新增資料
             </button>
-            <button class="btn-secondary sm btn-warn" @click="showTruncate = true">
+            <button class="btn-secondary sm btn-warn" @click="showTruncate = true" title="刪除表中所有資料，但保留表的結構">
               <Eraser :size="13" />
               清空
             </button>
-            <button class="btn-danger sm" @click="showDropTable = true">
+            <button class="btn-danger sm" @click="showDropTable = true" title="整張表連同所有資料一起刪除，無法復原">
               <Trash2 :size="13" />
               刪除表
             </button>
@@ -705,6 +705,14 @@ refreshTables()
 
         <!-- ── Structure View ── -->
         <div v-else class="structure-view">
+          <p class="help-text" style="margin-bottom: 12px">
+            這裡顯示資料表的「結構」— 有哪些欄位、各欄位的設定。你可以在這裡刪除不需要的欄位。
+          </p>
+          <div class="struct-legend">
+            <span class="badge pk" title="主鍵：每筆資料的唯一識別碼，系統自動產生，不會重複">PK 主鍵</span>
+            <span class="badge nn" title="必填：新增資料時此欄位不可留空">NOT NULL 必填</span>
+            <span class="badge fk" title="外鍵：此欄位的值必須來自另一張表"><Link :size="11" /> FK 外鍵</span>
+          </div>
           <table class="struct-table">
             <thead>
               <tr>
@@ -721,11 +729,11 @@ refreshTables()
               <tr v-for="col in columns" :key="col.cid">
                 <td class="struct-name">{{ col.name }}</td>
                 <td><span class="type-badge">{{ col.type || 'ANY' }}</span></td>
-                <td><span v-if="col.pk" class="badge pk">PK</span></td>
-                <td><span v-if="col.notnull" class="badge nn">NOT NULL</span></td>
+                <td><span v-if="col.pk" class="badge pk" title="主鍵：此欄位是每筆資料的唯一識別碼">PK</span></td>
+                <td><span v-if="col.notnull" class="badge nn" title="必填：此欄位不可留空">NOT NULL</span></td>
                 <td class="struct-default">{{ col.dflt_value ?? '' }}</td>
                 <td>
-                  <span v-if="getFKTag(col.name)" class="badge fk">
+                  <span v-if="getFKTag(col.name)" class="badge fk" :title="`外鍵：此欄位的值必須存在於 ${getFKTag(col.name)?.replace('→ ', '')} 表中`">
                     <Link :size="11" />
                     {{ getFKTag(col.name) }}
                   </span>
@@ -735,7 +743,7 @@ refreshTables()
                     v-if="!col.pk"
                     class="delete-row-btn"
                     @click="confirmDropCol(col.name)"
-                    title="刪除此欄位"
+                    title="刪除此欄位（該欄位的所有資料也會一併刪除）"
                   >
                     <Trash2 :size="12" />
                   </button>
@@ -771,6 +779,7 @@ refreshTables()
             欄位定義
             <small style="color: #9ca3af; font-weight: 400;">（id 主鍵自動加入）</small>
           </div>
+          <p class="help-text">每個欄位就是表格裡的一個「直欄」。例如員工表可能有「姓名」「年齡」「部門」等欄位。</p>
 
           <div class="col-defs">
             <div v-for="(col, i) in newTableCols" :key="i" class="col-def-item">
@@ -779,8 +788,8 @@ refreshTables()
                 <select v-model="col.type" class="field-select type-select" :disabled="col.fk">
                   <option v-for="t in TYPE_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}（{{ t.value }}）</option>
                 </select>
-                <label class="checkbox-label"><input type="checkbox" v-model="col.required" /> 必填</label>
-                <label class="checkbox-label"><input type="checkbox" v-model="col.unique" /> 唯一</label>
+                <label class="checkbox-label" title="勾選後此欄位不可留空，每筆資料都必須填寫"><input type="checkbox" v-model="col.required" /> 必填</label>
+                <label class="checkbox-label" title="勾選後此欄位的值不可重複，例如身分證號、帳號等"><input type="checkbox" v-model="col.unique" /> 唯一</label>
                 <button class="icon-btn" @click="removeColDef(i)" :disabled="newTableCols.length === 1"><X :size="14" /></button>
               </div>
               <!-- Extra options row -->
@@ -788,14 +797,17 @@ refreshTables()
                 <div class="col-type-hint">
                   {{ TYPE_OPTIONS.find(t => t.value === col.type)?.desc }} — 如：{{ TYPE_OPTIONS.find(t => t.value === col.type)?.example }}
                 </div>
-                <input v-model="col.defaultVal" class="field-input default-input" placeholder="預設值（選填）" />
-                <label class="checkbox-label fk-toggle">
+                <input v-model="col.defaultVal" class="field-input default-input" placeholder="預設值" title="新增資料時若未填寫此欄位，會自動填入這個值" />
+                <label class="checkbox-label fk-toggle" title="外鍵：讓此欄位的值必須來自另一張表，用來建立表與表之間的關聯。例如「訂單」的「客戶ID」指向「客戶」表">
                   <input type="checkbox" v-model="col.fk" @change="onFKToggle(col)" />
                   <Link :size="12" />
                   外鍵
                 </label>
               </div>
               <!-- FK selectors -->
+              <div v-if="col.fk" class="fk-hint">
+                <span>選擇這個欄位要參照哪張表的哪個欄位。填入資料時，只能填那張表裡已存在的值。</span>
+              </div>
               <div v-if="col.fk" class="fk-row">
                 <select v-model="col.fkTable" class="field-select fk-select" @change="onFKTableChange(col)">
                   <option value="">選擇參照表…</option>
@@ -842,14 +854,16 @@ refreshTables()
           </div>
           <label class="field-label" style="margin-top: 12px">預設值（選填）</label>
           <input v-model="newColDefault" class="field-input" placeholder="留空表示 NULL" />
+          <p class="help-text">如果新增資料時沒有填這個欄位，就會自動用這個值。</p>
 
           <!-- FK -->
           <div style="margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 14px">
-            <label class="checkbox-label" style="font-size: 13px; font-weight: 600; color: #374151; gap: 6px; margin-bottom: 10px">
+            <label class="checkbox-label" style="font-size: 13px; font-weight: 600; color: #374151; gap: 6px; margin-bottom: 4px">
               <input type="checkbox" v-model="newColFK" @change="onAddColFKToggle" />
               <Link :size="13" />
               設為外鍵
             </label>
+            <p class="help-text" style="margin-bottom: 10px">外鍵可以讓這個欄位的值必須來自另一張表，用來建立表與表之間的關聯。例如「訂單」表的「客戶ID」可以指向「客戶」表的 ID。</p>
             <div v-if="newColFK" style="display: flex; gap: 8px">
               <select v-model="newColFKTable" class="field-select" style="flex:1" @change="onAddColFKTableChange">
                 <option value="">選擇參照表…</option>
@@ -1142,6 +1156,17 @@ refreshTables()
 .page-btn:hover:not(:disabled) { background: #f3f4f6; }
 .page-btn:disabled { opacity: 0.4; cursor: default; }
 .page-info { font-size: 13px; color: #6b7280; }
+
+/* ── Help text ── */
+.help-text {
+  font-size: 12px; color: #9ca3af; margin: 4px 0 0; line-height: 1.5;
+}
+.fk-hint {
+  font-size: 11px; color: #6b7280; padding-left: 2px; font-style: italic;
+}
+.struct-legend {
+  display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+}
 
 /* ── Structure View ── */
 .structure-view { flex: 1; overflow: auto; padding: 16px 28px; }
