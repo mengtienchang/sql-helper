@@ -3,11 +3,11 @@ import * as duckdb from '@duckdb/duckdb-wasm'
 // ---- Embedded migrations (DuckDB syntax) ----
 const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '001_create_financial_report.sql', sql: `CREATE TABLE IF NOT EXISTS financial_report (id INTEGER PRIMARY KEY, period TEXT NOT NULL, 財報營收 REAL, 產值統計 REAL, 原材料成本 REAL, 委外加工 REAL, 人工成本 REAL, 變動製費 REAL, 變動管銷研 REAL, 固定人工 REAL, 廠房設備環境 REAL, 呆滯提列_報廢 REAL, 模具利潤 REAL, 在制半成品影響數 REAL, 開關設備折舊 REAL, 稅金附加 REAL, 營業成本_財報 REAL, 營業毛利 REAL, 銷管研 REAL, 財務收支 REAL, 業外收支 REAL, 庫存呆滯提列 REAL, 庫存呆滯_財報 REAL, 稅前淨利 REAL, 庫存周轉天數_原材料 REAL, 庫存周轉天數_在制品 REAL, 庫存周轉天數_成品 REAL, 庫存周轉天數_模具 REAL, NB機構件_塑膠 REAL, NB機構件_鋁皮 REAL, NB機構件_鎂鋁 REAL, NB機構件_鋁銑 REAL, NB機構件_塑膠2 REAL, 一體機_五金 REAL, 桌機_塑膠 REAL, 桌機_五金 REAL, 服務器_塑膠 REAL, 服務器_五金 REAL, 通訊通信設備_塑膠 REAL, 通訊通信設備_五金 REAL, 集線器_塑膠 REAL, 電話機_塑膠 REAL, 切板板 REAL, 鈑金 REAL, 汽車件 REAL, 電動車 REAL, 受託加工 REAL, 淨利潤 REAL, 流動資產 REAL, 固定資產_平均 REAL, 股東權益_平均 REAL, 總資產_年平均 REAL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)` },
-  { name: '002_create_factory.sql', sql: `CREATE TABLE IF NOT EXISTS factory (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, location TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);ALTER TABLE financial_report ADD COLUMN factory_id INTEGER REFERENCES factory(id)` },
+  { name: '002_create_factory.sql', sql: `CREATE TABLE IF NOT EXISTS factory (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, location TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);ALTER TABLE financial_report ADD COLUMN factory_id INTEGER` },
   { name: '003_create_metric.sql', sql: `CREATE TABLE IF NOT EXISTS metric (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL, sql TEXT NOT NULL, description TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)` },
   { name: '004_create_chart.sql', sql: `CREATE TABLE IF NOT EXISTS chart (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, chart_type TEXT NOT NULL DEFAULT 'line', sql TEXT NOT NULL, x_column TEXT NOT NULL, series_columns TEXT NOT NULL DEFAULT '[]', title TEXT, y_formatter TEXT, stack INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, description TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)` },
-  { name: '005_create_dashboard.sql', sql: `CREATE TABLE IF NOT EXISTS dashboard (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS dashboard_item (id INTEGER PRIMARY KEY, dashboard_id INTEGER NOT NULL REFERENCES dashboard(id) ON DELETE CASCADE, item_type TEXT NOT NULL, item_id INTEGER NOT NULL, col_span INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0)` },
-  { name: '006_create_chat.sql', sql: `CREATE TABLE IF NOT EXISTS chat_session (id INTEGER PRIMARY KEY, title TEXT DEFAULT '新對話', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS chat_message (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES chat_session(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, sql_text TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS app_setting (key TEXT PRIMARY KEY, value TEXT NOT NULL)` },
+  { name: '005_create_dashboard.sql', sql: `CREATE TABLE IF NOT EXISTS dashboard (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT, sort_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS dashboard_item (id INTEGER PRIMARY KEY, dashboard_id INTEGER NOT NULL, item_type TEXT NOT NULL, item_id INTEGER NOT NULL, col_span INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0)` },
+  { name: '006_create_chat.sql', sql: `CREATE TABLE IF NOT EXISTS chat_session (id INTEGER PRIMARY KEY, title TEXT DEFAULT '新對話', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS chat_message (id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, sql_text TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);CREATE TABLE IF NOT EXISTS app_setting (key TEXT PRIMARY KEY, value TEXT NOT NULL)` },
   { name: '007_metric_thresholds.sql', sql: `ALTER TABLE metric ADD COLUMN unit TEXT DEFAULT '';ALTER TABLE metric ADD COLUMN thresholds TEXT DEFAULT ''` },
   { name: '008_create_export_template.sql', sql: `CREATE TABLE IF NOT EXISTS export_template (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT, file_data BLOB NOT NULL, file_name TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)` },
   { name: '009_chart_category.sql', sql: `ALTER TABLE chart ADD COLUMN category TEXT DEFAULT ''` },
@@ -51,7 +51,9 @@ async function execute(sql: string, params?: unknown[]): Promise<QueryResult> {
       const row: Record<string, unknown> = {}
       for (const col of columns) {
         const vec = result.getChild(col)
-        row[col] = vec?.get(i)
+        let v = vec?.get(i)
+        if (typeof v === 'bigint') v = Number(v)
+        row[col] = v
       }
       rows.push(row)
     }
