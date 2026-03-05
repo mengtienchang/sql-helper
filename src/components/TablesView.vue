@@ -7,7 +7,29 @@ interface ColInfo {
 }
 interface Row { [key: string]: unknown }
 
-const TYPES = ['TEXT', 'INTEGER', 'REAL', 'BLOB', 'NUMERIC']
+const TYPE_OPTIONS = [
+  { value: 'TEXT',    label: '文字',   desc: '任意文字、名稱、備註', example: '王小明、備註說明' },
+  { value: 'INTEGER', label: '整數',   desc: '數量、年齡、ID 等沒有小數的數字', example: '1, 100, -5' },
+  { value: 'REAL',    label: '小數',   desc: '金額、比率等帶小數點的數字', example: '3.14, 99.9' },
+  { value: 'NUMERIC', label: '數值',   desc: '通用數值，自動判斷整數或小數', example: '42, 3.14' },
+  { value: 'BLOB',    label: '二進位', desc: '檔案、圖片等原始資料（少用）', example: '二進位資料' },
+]
+
+// 根據欄位名稱自動推測類型
+function autoDetectType(name: string): string {
+  const n = name.trim().toLowerCase()
+  if (!n) return 'TEXT'
+  // 整數型
+  if (/^(id|數量|qty|count|amount|num|age|年齡|人數|次數|排序|sort|order|序號|編號)$/i.test(n)) return 'INTEGER'
+  if (/((_id|Id|_count|_num|_qty)$)/.test(name.trim())) return 'INTEGER'
+  if (/^(is_|has_|flag|enabled|active|啟用|是否)/.test(n)) return 'INTEGER'
+  // 小數型
+  if (/(率|rate|ratio|percent|%|價格|price|cost|金額|salary|薪|weight|重量|溫度|temp)/.test(n)) return 'REAL'
+  if (/(amount|total|sum|avg|平均|合計|小計|單價|成本|毛利|淨利|營收|利潤|費用|折舊)/.test(n)) return 'REAL'
+  // 日期時間（存為文字）
+  if (/(date|time|日期|時間|created|updated|_at$)/.test(n)) return 'TEXT'
+  return 'TEXT'
+}
 
 // ── State ──
 const tables = ref<string[]>([])
@@ -317,18 +339,23 @@ refreshTables()
           </div>
 
           <div class="col-defs">
-            <div v-for="(col, i) in newTableCols" :key="i" class="col-def-row">
-              <input v-model="col.name" class="field-input col-name-input" placeholder="欄位名稱" />
-              <select v-model="col.type" class="field-select">
-                <option v-for="t in TYPES" :key="t">{{ t }}</option>
-              </select>
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="col.required" />
-                必填
-              </label>
-              <button class="icon-btn" @click="removeColDef(i)" :disabled="newTableCols.length === 1">
-                <X :size="14" />
-              </button>
+            <div v-for="(col, i) in newTableCols" :key="i" class="col-def-item">
+              <div class="col-def-row">
+                <input v-model="col.name" class="field-input col-name-input" placeholder="欄位名稱" @blur="col.type = autoDetectType(col.name)" />
+                <select v-model="col.type" class="field-select type-select" :title="TYPE_OPTIONS.find(t => t.value === col.type)?.desc">
+                  <option v-for="t in TYPE_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}（{{ t.value }}）</option>
+                </select>
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="col.required" />
+                  必填
+                </label>
+                <button class="icon-btn" @click="removeColDef(i)" :disabled="newTableCols.length === 1">
+                  <X :size="14" />
+                </button>
+              </div>
+              <div class="col-type-hint">
+                {{ TYPE_OPTIONS.find(t => t.value === col.type)?.desc }} — 如：{{ TYPE_OPTIONS.find(t => t.value === col.type)?.example }}
+              </div>
             </div>
           </div>
 
@@ -353,11 +380,14 @@ refreshTables()
         </div>
         <div class="modal-body">
           <label class="field-label">欄位名稱</label>
-          <input v-model="newColName" class="field-input" placeholder="例如：description" />
+          <input v-model="newColName" class="field-input" placeholder="例如：description" @blur="newColType = autoDetectType(newColName)" />
           <label class="field-label" style="margin-top: 12px">欄位類型</label>
-          <select v-model="newColType" class="field-select" style="width: 100%">
-            <option v-for="t in TYPES" :key="t">{{ t }}</option>
+          <select v-model="newColType" class="field-select" style="width: 100%" :title="TYPE_OPTIONS.find(t => t.value === newColType)?.desc">
+            <option v-for="t in TYPE_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}（{{ t.value }}）— {{ t.desc }}</option>
           </select>
+          <div class="col-type-hint" style="margin-top: 4px">
+            {{ TYPE_OPTIONS.find(t => t.value === newColType)?.desc }} — 如：{{ TYPE_OPTIONS.find(t => t.value === newColType)?.example }}
+          </div>
           <label class="field-label" style="margin-top: 12px">預設值（選填）</label>
           <input v-model="newColDefault" class="field-input" placeholder="留空表示 NULL" />
         </div>
@@ -583,9 +613,12 @@ refreshTables()
 .field-select:focus { border-color: #2563eb; }
 
 /* ── Column Defs ── */
-.col-defs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.col-defs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.col-def-item { display: flex; flex-direction: column; gap: 4px; }
 .col-def-row { display: flex; gap: 8px; align-items: center; }
 .col-name-input { flex: 1; }
+.type-select { min-width: 140px; }
+.col-type-hint { font-size: 11px; color: #9ca3af; padding-left: 2px; }
 .checkbox-label {
   display: flex; align-items: center; gap: 4px;
   font-size: 12px; color: #6b7280; white-space: nowrap; cursor: pointer;
