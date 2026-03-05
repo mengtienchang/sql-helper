@@ -168,15 +168,15 @@ async function save() {
           <input v-model="form.description" placeholder="這個儀表板的用途" />
         </div>
 
-        <!-- 智能分析與建議動作 -->
-        <div class="section-title">智能分析</div>
+        <!-- 智能分析與建議動作（暫時隱藏，待接入 AI 後啟用） -->
+        <!-- <div class="section-title">智能分析</div>
         <div class="field">
           <textarea v-model="form.analysis" rows="4" placeholder="針對此儀表板的數據分析摘要"></textarea>
         </div>
         <div class="section-title">建議動作</div>
         <div class="field">
           <textarea v-model="form.actions" rows="4" placeholder="每行一條建議，例如：&#10;1. 檢討銷管研費用結構&#10;2. 設定下一年度營收目標"></textarea>
-        </div>
+        </div> -->
 
         <!-- 選擇圖表 -->
         <div class="section-title">選擇圖表</div>

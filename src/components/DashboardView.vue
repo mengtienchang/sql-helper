@@ -381,8 +381,8 @@ const iconMap: Record<string, any> = {
           </div>
         </div>
 
-        <!-- Story section: analysis + actions -->
-        <div v-if="activeDashboard?.analysis || activeDashboard?.actions" class="story-section">
+        <!-- Story section: analysis + actions (暫時隱藏，待接入 AI 後啟用) -->
+        <!-- <div v-if="activeDashboard?.analysis || activeDashboard?.actions" class="story-section">
           <div v-if="activeDashboard?.analysis" class="story-card analysis-card">
             <div class="story-card-header">
               <div class="story-icon analysis-icon">
@@ -411,7 +411,7 @@ const iconMap: Record<string, any> = {
         </div>
         <p v-if="activeDashboard?.analysis || activeDashboard?.actions" class="ai-disclaimer">
           以上「智能分析」與「建議動作」為預設示例內容，接入 AI 後將依據實際數據自動產生。可在管理頁手動編輯。
-        </p>
+        </p> -->
       </template>
     </div>
   </div>
