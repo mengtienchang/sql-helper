@@ -88,11 +88,17 @@ async function runMigrations(): Promise<void> {
   }
 }
 
+async function createWorkerFromURL(url: string): Promise<Worker> {
+  const resp = await fetch(url)
+  const blob = new Blob([await resp.text()], { type: 'application/javascript' })
+  return new Worker(URL.createObjectURL(blob))
+}
+
 export async function initWebDB(): Promise<void> {
   const BUNDLES = duckdb.getJsDelivrBundles()
   const bundle = await duckdb.selectBundle(BUNDLES)
 
-  const worker = new Worker(bundle.mainWorker!)
+  const worker = await createWorkerFromURL(bundle.mainWorker!)
   const logger = new duckdb.ConsoleLogger()
   db = new duckdb.AsyncDuckDB(logger, worker)
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker)
