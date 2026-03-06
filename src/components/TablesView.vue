@@ -34,11 +34,19 @@ interface ColDef {
 }
 
 const TYPE_OPTIONS = [
-  { value: 'TEXT',    label: '文字',   desc: '任意文字、名稱、備註', example: '王小明、備註說明' },
-  { value: 'INTEGER', label: '整數',   desc: '數量、年齡、ID 等沒有小數的數字', example: '1, 100, -5' },
-  { value: 'REAL',    label: '小數',   desc: '金額、比率等帶小數點的數字', example: '3.14, 99.9' },
-  { value: 'NUMERIC', label: '數值',   desc: '通用數值，自動判斷整數或小數', example: '42, 3.14' },
-  { value: 'BLOB',    label: '二進位', desc: '檔案、圖片等原始資料（少用）', example: '二進位資料' },
+  { value: 'TEXT',      label: '文字',     desc: '任意文字、名稱、備註', example: '王小明、備註說明' },
+  { value: 'VARCHAR',   label: '可變文字', desc: '同 TEXT，可指定最大長度', example: 'hello, 備註' },
+  { value: 'INTEGER',   label: '整數',     desc: '數量、年齡、ID 等沒有小數的數字', example: '1, 100, -5' },
+  { value: 'BIGINT',    label: '大整數',   desc: '超大整數，適合金額或大型 ID', example: '9999999999' },
+  { value: 'SMALLINT',  label: '小整數',   desc: '節省空間的小範圍整數（-32768~32767）', example: '1, 255' },
+  { value: 'REAL',      label: '浮點數',   desc: '帶小數點的數字（單精度）', example: '3.14, 99.9' },
+  { value: 'DOUBLE',    label: '雙精度',   desc: '高精度浮點數，適合科學計算', example: '3.141592653589793' },
+  { value: 'NUMERIC',   label: '數值',     desc: '通用數值，自動判斷整數或小數', example: '42, 3.14' },
+  { value: 'BOOLEAN',   label: '布林',     desc: '真/假值，用於開關或狀態', example: 'true, false' },
+  { value: 'DATE',      label: '日期',     desc: '年月日', example: '2024-01-15' },
+  { value: 'TIME',      label: '時間',     desc: '時分秒', example: '14:30:00' },
+  { value: 'TIMESTAMP', label: '時間戳',   desc: '完整日期加時間', example: '2024-01-15 14:30:00' },
+  { value: 'BLOB',      label: '二進位',   desc: '檔案、圖片等原始資料（少用）', example: '二進位資料' },
 ]
 
 function autoDetectType(name: string): string {
@@ -46,10 +54,12 @@ function autoDetectType(name: string): string {
   if (!n) return 'TEXT'
   if (/^(id|數量|qty|count|amount|num|age|年齡|人數|次數|排序|sort|order|序號|編號)$/i.test(n)) return 'INTEGER'
   if (/((_id|Id|_count|_num|_qty)$)/.test(name.trim())) return 'INTEGER'
-  if (/^(is_|has_|flag|enabled|active|啟用|是否)/.test(n)) return 'INTEGER'
-  if (/(率|rate|ratio|percent|%|價格|price|cost|金額|salary|薪|weight|重量|溫度|temp)/.test(n)) return 'REAL'
-  if (/(amount|total|sum|avg|平均|合計|小計|單價|成本|毛利|淨利|營收|利潤|費用|折舊)/.test(n)) return 'REAL'
-  if (/(date|time|日期|時間|created|updated|_at$)/.test(n)) return 'TEXT'
+  if (/^(is_|has_|flag|enabled|active|啟用|是否)/.test(n)) return 'BOOLEAN'
+  if (/(率|rate|ratio|percent|%|價格|price|cost|金額|salary|薪|weight|重量|溫度|temp)/.test(n)) return 'DOUBLE'
+  if (/(amount|total|sum|avg|平均|合計|小計|單價|成本|毛利|淨利|營收|利潤|費用|折舊)/.test(n)) return 'DOUBLE'
+  if (/(date|日期)/.test(n) && !/(time|時間)/.test(n)) return 'DATE'
+  if (/(datetime|timestamp|created|updated|_at$|時間戳)/.test(n)) return 'TIMESTAMP'
+  if (/(time|時間)/.test(n)) return 'TIME'
   return 'TEXT'
 }
 
