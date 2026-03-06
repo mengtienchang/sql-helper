@@ -25,7 +25,7 @@ export class DatabaseService {
       this.db = new duckdb.Database(this.filePath, (err) => {
         if (err) return reject(err)
         this.conn = (this.db as duckdb.Database).connect()
-        this.runMigrations().then(resolve).catch(reject)
+        this.runMigrations().then(() => this.syncSequences()).then(resolve).catch(reject)
       })
     })
   }
@@ -71,8 +71,9 @@ export class DatabaseService {
   }
 
   private async runMigrations(): Promise<void> {
+    await this.execute(`CREATE SEQUENCE IF NOT EXISTS _migrations_id_seq`)
     await this.execute(`CREATE TABLE IF NOT EXISTS _migrations (
-      id INTEGER PRIMARY KEY,
+      id INTEGER DEFAULT nextval('_migrations_id_seq') PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`)
@@ -95,6 +96,27 @@ export class DatabaseService {
       }
       await this.execute('INSERT INTO _migrations (name) VALUES (?)', [file])
       console.log(`[migration] executed: ${file}`)
+    }
+  }
+
+  private async syncSequences(): Promise<void> {
+    const tables = [
+      'financial_report', 'factory', 'metric', 'chart',
+      'dashboard', 'dashboard_item', 'chat_session', 'chat_message', 'export_template',
+    ]
+    for (const table of tables) {
+      const seq = `${table}_id_seq`
+      try {
+        const r = await this.execute(`SELECT COALESCE(MAX(id), 0) as max_id FROM ${table}`)
+        const maxId = (r.rows?.[0]?.max_id as number) ?? 0
+        if (maxId > 0) {
+          await this.execute(`DROP SEQUENCE IF EXISTS ${seq}`)
+          await this.execute(`CREATE SEQUENCE ${seq} START ${maxId + 1}`)
+          await this.execute(`ALTER TABLE ${table} ALTER COLUMN id SET DEFAULT nextval('${seq}')`)
+        }
+      } catch (e) {
+        console.warn(`[syncSequences] ${table}:`, e)
+      }
     }
   }
 
