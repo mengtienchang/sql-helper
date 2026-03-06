@@ -130,9 +130,11 @@ async function seed() {
     ]
     const factoryIds: number[] = []
     for (const f of factories) {
-      await execute('INSERT INTO factory (name, location) VALUES (?, ?) ON CONFLICT DO NOTHING', [f.name, f.location])
-      const r = await execute('SELECT id FROM factory WHERE name = ?', [f.name])
-      factoryIds.push((r.rows?.[0]?.id as number) ?? 0)
+      const r = await execute(
+        'INSERT INTO factory (name, location) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET location=excluded.location RETURNING id',
+        [f.name, f.location]
+      )
+      factoryIds.push(r.rows![0]!.id as number)
     }
 
     const periods = ['2023-Q1','2023-Q2','2023-Q3','2023-Q4','2024-Q1','2024-Q2','2024-Q3','2024-Q4','2025-Q1','2025-Q2','2025-Q3','2025-Q4']
@@ -172,7 +174,7 @@ async function seed() {
       { name: '庫存周轉天數合計', category: '營運效率', sql: `SELECT period, factory_id, (庫存周轉天數_原材料 + 庫存周轉天數_在制品 + 庫存周轉天數_成品 + 庫存周轉天數_模具) as value FROM financial_report`, description: '各類庫存周轉天數加總', unit: '天', thresholds: '' },
     ]
     for (const m of metrics) {
-      await execute('INSERT INTO metric (name, category, sql, description, unit, thresholds) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING', [m.name, m.category, m.sql, m.description, m.unit, m.thresholds])
+      await execute('INSERT INTO metric (name, category, sql, description, unit, thresholds) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(name) DO NOTHING', [m.name, m.category, m.sql, m.description, m.unit, m.thresholds])
       if (m.unit || m.thresholds) { await execute(`UPDATE metric SET unit=?, thresholds=? WHERE name=? AND (unit='' OR unit IS NULL)`, [m.unit, m.thresholds, m.name]) }
     }
 
@@ -187,7 +189,7 @@ async function seed() {
       { name: '廠區營收佔比', chart_type: 'pie', category: '廠區', sql: `SELECT f.name as 廠區, SUM(財報營收) as 營收 FROM financial_report fr JOIN factory f ON f.id=fr.factory_id GROUP BY f.name`, x_column: '廠區', series_columns: JSON.stringify(['營收']), title: '各廠區營收佔比', y_formatter: '', stack: 0, enabled: 1, sort_order: 16, description: '各廠區營收佔總體比例' },
     ]
     for (const c of charts) {
-      await execute('INSERT INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description, category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING',
+      await execute('INSERT INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description, category) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(name) DO NOTHING',
         [c.name, c.chart_type, c.sql, c.x_column, c.series_columns, c.title, c.y_formatter, c.stack, c.enabled, c.sort_order, c.description, c.category])
     }
 
@@ -198,7 +200,7 @@ async function seed() {
       { name: '獲利深度分析', description: '利潤率與報酬率', sort_order: 3, analysis: '', actions: '' },
       { name: '成本與損益', description: '成本結構與損益平衡', sort_order: 4, analysis: '', actions: '' },
     ]
-    for (const d of dashboardDefs) { await execute('INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING', [d.name, d.description, d.sort_order, d.analysis, d.actions]) }
+    for (const d of dashboardDefs) { await execute('INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) ON CONFLICT(name) DO NOTHING', [d.name, d.description, d.sort_order, d.analysis, d.actions]) }
 
     const getId = async (table: string, name: string): Promise<number | null> => { const r = await execute(`SELECT id FROM ${table} WHERE name = ?`, [name]); return (r.rows?.[0]?.id as number) ?? null }
 

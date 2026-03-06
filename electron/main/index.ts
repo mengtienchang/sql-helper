@@ -109,12 +109,11 @@ function registerIpcHandlers(): void {
       ]
       const factoryIds: number[] = []
       for (const f of factories) {
-        await dbService.execute(
-          `INSERT INTO factory (name, location) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+        const r = await dbService.execute(
+          `INSERT INTO factory (name, location) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET location=excluded.location RETURNING id`,
           [f.name, f.location]
         )
-        const r = await dbService.execute('SELECT id FROM factory WHERE name = ?', [f.name])
-        factoryIds.push((r.rows?.[0]?.id as number) ?? 0)
+        factoryIds.push(r.rows![0]!.id as number)
       }
 
       const periods = ['2023-Q1', '2023-Q2', '2023-Q3', '2023-Q4', '2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4', '2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4']
@@ -164,7 +163,7 @@ function registerIpcHandlers(): void {
       ]
       for (const m of metrics) {
         await dbService.execute(
-          `INSERT INTO metric (name, category, sql, description, unit, thresholds) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+          `INSERT INTO metric (name, category, sql, description, unit, thresholds) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(name) DO NOTHING`,
           [m.name, m.category, m.sql, m.description, m.unit, m.thresholds]
         )
         if (m.unit || m.thresholds) {
@@ -182,7 +181,7 @@ function registerIpcHandlers(): void {
       ]
       for (const c of charts) {
         await dbService.execute(
-          `INSERT INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`,
+          `INSERT INTO chart (name, chart_type, sql, x_column, series_columns, title, y_formatter, stack, enabled, sort_order, description) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(name) DO NOTHING`,
           [c.name, c.chart_type, c.sql, c.x_column, c.series_columns, c.title, c.y_formatter, c.stack, c.enabled, c.sort_order, c.description]
         )
       }
@@ -196,7 +195,7 @@ function registerIpcHandlers(): void {
       ]
       for (const d of dashboardDefs) {
         await dbService.execute(
-          `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+          `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) ON CONFLICT(name) DO NOTHING`,
           [d.name, d.description, d.sort_order, d.analysis, d.actions]
         )
       }

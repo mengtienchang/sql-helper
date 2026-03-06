@@ -127,7 +127,13 @@ async function save() {
         `INSERT INTO dashboard (name, description, sort_order, analysis, actions) VALUES (?, ?, ?, ?, ?) RETURNING id`,
         [form.value.name, form.value.description, form.value.sort_order, form.value.analysis, form.value.actions]
       )
-      dashboardId = (res.rows?.[0] as any)?.id ?? 0
+      const newId = (res.rows?.[0] as any)?.id
+      if (!newId) {
+        error.value = '儀表板建立失敗，請重試'
+        saving.value = false
+        return
+      }
+      dashboardId = newId
     }
 
     // 插入 items
